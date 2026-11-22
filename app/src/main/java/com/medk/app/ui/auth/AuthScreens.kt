@@ -108,6 +108,7 @@ class AuthViewModel : ViewModel() {
     fun register(name: String, email: String, password: String) = run("email") { repo.register(name, email, password) }
     fun google(ctx: android.content.Context) = run("google") { repo.signInWithGoogle(ctx) }
     fun reset(email: String) = run("email") { repo.sendPasswordReset(email); _resetSent.value = true }
+    fun demo(role: com.medk.app.data.Role) = (repo as? com.medk.app.data.demo.DemoAuthRepository)?.loginAs(role)
 }
 
 private fun validEmail(s: String) = Patterns.EMAIL_ADDRESS.matcher(s.trim()).matches()
@@ -140,7 +141,7 @@ fun SplashScreen() {
 
 // ================================================================ welcome
 @Composable
-fun WelcomeScreen(onLogin: () -> Unit, onRegister: () -> Unit) {
+fun WelcomeScreen(onLogin: () -> Unit, onRegister: () -> Unit, vm: AuthViewModel = viewModel()) {
     val t = rememberInfiniteTransition(label = "float")
     val y by t.animateFloat(-6f, 6f, infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "y")
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().navigationBarsPadding()
@@ -161,11 +162,31 @@ fun WelcomeScreen(onLogin: () -> Unit, onRegister: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         Text("شحن الألعاب، اشتراكات التطبيقات، الحسابات، العملات الرقمية P2P وبطاقات الهدايا — بأمان وسرعة مع فريق مبيعات حقيقي.",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(20.dp))
+        DemoLoginPanel(vm)
+        Spacer(Modifier.height(if (com.medk.app.BuildConfig.DEMO) 14.dp else 8.dp))
         PrimaryButton("تسجيل الدخول", onLogin)
         Spacer(Modifier.height(12.dp))
         SecondaryButton("إنشاء حساب", onRegister)
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+// ============================================================ demo panel
+/** One-tap sign-in for the demo flavor (no backend). */
+@Composable
+fun DemoLoginPanel(vm: AuthViewModel) {
+    if (!com.medk.app.BuildConfig.DEMO) return
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MedkColors.Purple.copy(.12f))
+        .border(1.dp, MedkColors.Purple.copy(.5f), RoundedCornerShape(20.dp)).padding(14.dp)) {
+        Text("نسخة تجريبية — بدون خادم", style = MaterialTheme.typography.titleSmall, color = MedkColors.Violet)
+        Text("ادخل مباشرة بأحد الأدوار لتجربة التطبيق ببيانات تجريبية:", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(com.medk.app.data.Role.CUSTOMER to "عميل", com.medk.app.data.Role.STAFF to "موظف", com.medk.app.data.Role.OWNER to "مالك")
+                .forEach { (r, l) -> PrimaryButton(l, { vm.demo(r) }, Modifier.weight(1f), height = 44.dp) }
+        }
     }
 }
 
@@ -236,6 +257,8 @@ fun LoginScreen(onBack: () -> Unit, onRegister: () -> Unit, onForgot: () -> Unit
     val passErr = if (submitted && password.isEmpty()) "أدخل كلمة المرور" else null
 
     AuthScaffold("تسجيل الدخول", "مرحباً بعودتك إلى MED-K", onBack) {
+        DemoLoginPanel(vm)
+        if (com.medk.app.BuildConfig.DEMO) Spacer(Modifier.height(16.dp))
         ErrorBanner(error)
         MedkTextField(email, { email = it; vm.clearError() }, "البريد الإلكتروني", leading = Icons.Filled.Email,
             keyboardType = KeyboardType.Email, error = emailErr)

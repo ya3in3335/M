@@ -6,6 +6,16 @@
 |---|---|---|---|
 | ![](app/screenshots/04_home.png) | ![](app/screenshots/02_welcome.png) | ![](app/screenshots/03_login.png) | ![](app/screenshots/06_products.png) |
 
+## 🧪 النسخة التجريبية (Demo) — بدون خادم
+للتجربة السريعة يوجد إصدار **demo** يعمل بالكامل بدون Firebase أو Supabase، ببيانات تجريبية في الذاكرة (تُعاد عند إعادة تشغيل التطبيق):
+- الدخول بضغطة واحدة كـ **عميل / موظف / مالك** من شاشة الترحيب.
+- كل الشاشات تعمل: الأقسام، المنتجات، السلة (مع تقسيم الطلب حسب البائع)، المحادثات مع **رد تلقائي من البائع**، تتبع الطلبات، لوحة المالك، إدارة المنتجات والموظفين.
+- يُثبَّت بجانب النسخة الحقيقية (`com.medk.app.demo`) باسم **MED-K Demo**.
+```bash
+./gradlew assembleDemoDebug   # app/build/outputs/apk/demo/debug/app-demo-debug.apk
+```
+أو من GitHub Actions: Artifact باسم **`MED-K-DEMO-apk`**.
+
 ## المحتويات
 - [الميزات](#الميزات)
 - [البنية](#البنية)
@@ -94,8 +104,8 @@ GOOGLE_WEB_CLIENT_ID=xxxx.apps.googleusercontent.com   # اختياري إذا �
 
 ## 4. توليد APK
 ```bash
-./gradlew assembleDebug
-# app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleProdDebug
+# app/build/outputs/apk/prod/debug/app-prod-debug.apk
 ```
 أو من GitHub: **Actions → Android build → آخر تشغيل → Artifacts → `MED-K-debug-apk`**.
 
@@ -112,8 +122,8 @@ GOOGLE_WEB_CLIENT_ID=xxxx.apps.googleusercontent.com   # اختياري إذا �
    MEDK_KEY_PASSWORD=...
    ```
 3. ```bash
-   ./gradlew bundleRelease
-   # app/build/outputs/bundle/release/app-release.aab
+   ./gradlew bundleProdRelease
+   # app/build/outputs/bundle/prodRelease/app-prod-release.aab
    ```
 4. ارفع الـ AAB إلى Google Play Console (مع تفعيل Play App Signing). أضف بصمة SHA-1 لمفتاح Play App Signing إلى Firebase.
 
@@ -144,5 +154,5 @@ GOOGLE_WEB_CLIENT_ID=xxxx.apps.googleusercontent.com   # اختياري إذا �
 
 ## لقطات الشاشة (اختبارات)
 ```bash
-./gradlew recordRoborazziDebug   # يحدّث الصور في app/screenshots
+./gradlew recordRoborazziProdDebug recordRoborazziDemoDebug   # يحدّث الصور في app/screenshots
 ```

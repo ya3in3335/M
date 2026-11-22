@@ -9,12 +9,12 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-class OrderRepository(private val c: AppContainer) {
+open class OrderRepository(private val c: AppContainer) {
     private val db get() = c.supabase
     private val withItems = Columns.raw("*, order_items(*)")
 
     /** Orders visible to the current user (RLS scopes customers/staff/owner). */
-    suspend fun visibleOrders(status: OrderStatus? = null, onlyMine: Boolean = false): List<Order> {
+    open suspend fun visibleOrders(status: OrderStatus? = null, onlyMine: Boolean = false): List<Order> {
         val uid = c.auth.currentUid
         return db.from("orders").select(withItems) {
             filter {
@@ -25,19 +25,19 @@ class OrderRepository(private val c: AppContainer) {
         }.decodeList()
     }
 
-    suspend fun order(id: String): Order =
+    open suspend fun order(id: String): Order =
         db.from("orders").select(withItems) { filter { eq("id", id) } }.decodeSingle()
 
-    suspend fun updateStatus(orderId: String, status: OrderStatus) {
+    open suspend fun updateStatus(orderId: String, status: OrderStatus) {
         db.from("orders").update({ set("status", status.key) }) { filter { eq("id", orderId) } }
     }
 
-    suspend fun assignStaff(orderId: String, staffId: String?) {
+    open suspend fun assignStaff(orderId: String, staffId: String?) {
         db.from("orders").update({ set("staff_id", staffId) }) { filter { eq("id", orderId) } }
     }
 
     /** Server-side checkout: one order + conversation per assigned sales representative. */
-    suspend fun checkout(lines: List<CartLine>, note: String?): List<CreatedOrder> {
+    open suspend fun checkout(lines: List<CartLine>, note: String?): List<CreatedOrder> {
         val items = buildJsonArray {
             lines.forEach { l -> add(buildJsonObject { put("product_id", l.productId); put("quantity", l.quantity) }) }
         }

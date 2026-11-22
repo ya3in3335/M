@@ -26,29 +26,29 @@ import kotlinx.serialization.json.put
 import java.util.UUID
 import kotlin.time.Duration.Companion.hours
 
-class ChatRepository(private val c: AppContainer) {
+open class ChatRepository(private val c: AppContainer) {
     private val db get() = c.supabase
     private val bucket = "chat-attachments"
     private val urlCache = mutableMapOf<String, String>()
     private val profileCache = mutableMapOf<String, Profile>()
 
-    suspend fun conversations(): List<Conversation> =
+    open suspend fun conversations(): List<Conversation> =
         db.from("conversations").select { order("last_message_at", Order.DESCENDING) }.decodeList()
 
-    suspend fun conversation(id: String): Conversation =
+    open suspend fun conversation(id: String): Conversation =
         db.from("conversations").select { filter { eq("id", id) } }.decodeSingle()
 
-    suspend fun conversationForOrder(orderId: String): Conversation? =
+    open suspend fun conversationForOrder(orderId: String): Conversation? =
         db.from("conversations").select { filter { eq("order_id", orderId) }; limit(1) }.decodeList<Conversation>().firstOrNull()
 
-    suspend fun messages(conversationId: String): List<Message> =
+    open suspend fun messages(conversationId: String): List<Message> =
         db.from("messages").select {
             filter { eq("conversation_id", conversationId) }
             order("created_at", Order.ASCENDING); limit(500)
         }.decodeList()
 
     /** Realtime stream of new messages in a conversation. */
-    fun newMessages(conversationId: String): Flow<Message> = callbackFlow {
+    open fun newMessages(conversationId: String): Flow<Message> = callbackFlow {
         val ch = db.channel("conv-$conversationId-${UUID.randomUUID()}")
         val flow = ch.postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
             table = "messages"
@@ -59,13 +59,13 @@ class ChatRepository(private val c: AppContainer) {
         awaitClose { job.cancel(); c.appScope.launch { runCatching { db.realtime.removeChannel(ch) } } }
     }
 
-    suspend fun sendText(conversationId: String, text: String): Message {
+    open suspend fun sendText(conversationId: String, text: String): Message {
         val uid = c.auth.currentUid ?: error("not signed in")
         return db.from("messages").insert(MessageInput(conversationId, uid, text.trim())) { select() }.decodeSingle()
     }
 
     /** Uploads an image/video/PDF to private storage then posts the message. */
-    suspend fun sendAttachment(conversationId: String, uri: Uri, caption: String?): Message {
+    open suspend fun sendAttachment(conversationId: String, uri: Uri, caption: String?): Message {
         val uid = c.auth.currentUid ?: error("not signed in")
         val resolver = c.context.contentResolver
         val mime = resolver.getType(uri) ?: "application/octet-stream"
@@ -94,22 +94,22 @@ class ChatRepository(private val c: AppContainer) {
     }
 
     /** Short-lived signed URL for a private attachment. */
-    suspend fun attachmentUrl(path: String): String =
+    open suspend fun attachmentUrl(path: String): String =
         urlCache[path] ?: db.storage.from(bucket).createSignedUrl(path, 2.hours).also { urlCache[path] = it }
 
     /** Opens/reuses a conversation with the seller of a product/section (or support when both null). */
-    suspend fun start(productId: String?, sectionId: String?, subject: String?): String {
+    open suspend fun start(productId: String?, sectionId: String?, subject: String?): String {
         val res = db.postgrest.rpc("start_conversation", buildJsonObject {
             put("p_product", productId); put("p_section", sectionId); put("p_subject", subject)
         })
         return c.json.parseToJsonElement(res.data).jsonPrimitive.content
     }
 
-    suspend fun assignStaff(conversationId: String, staffId: String?) {
+    open suspend fun assignStaff(conversationId: String, staffId: String?) {
         db.from("conversations").update({ set("staff_id", staffId) }) { filter { eq("id", conversationId) } }
     }
 
-    suspend fun profiles(ids: Collection<String>): Map<String, Profile> {
+    open suspend fun profiles(ids: Collection<String>): Map<String, Profile> {
         val missing = ids.filter { it !in profileCache }
         if (missing.isNotEmpty()) runCatching {
             db.from("profiles").select { filter { isIn("id", missing) } }.decodeList<Profile>().forEach { profileCache[it.id] = it }

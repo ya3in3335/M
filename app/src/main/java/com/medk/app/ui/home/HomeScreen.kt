@@ -100,7 +100,11 @@ fun HomeScreen(nav: NavHostController, onMenu: () -> Unit, unread: Int) {
         // header
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, "القائمة", modifier = Modifier.size(28.dp)) }
-            MedkWordmark(subtitle = true, modifier = Modifier.weight(1f))
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                MedkWordmark(subtitle = true)
+                if (com.medk.app.BuildConfig.DEMO) com.medk.app.ui.components.Pill("تجريبي", MedkColors.Warning,
+                    Modifier.align(Alignment.TopStart))
+            }
             Box {
                 IconButton(onClick = { nav.navigate(Routes.NOTIFICATIONS) }) {
                     Icon(Icons.Outlined.Notifications, "الإشعارات", modifier = Modifier.size(28.dp))

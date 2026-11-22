@@ -13,6 +13,12 @@ import com.medk.app.data.EdgeFunctions
 import com.medk.app.data.NotificationRepository
 import com.medk.app.data.OrderRepository
 import com.medk.app.data.SettingsRepository
+import com.medk.app.data.demo.DemoAdminRepository
+import com.medk.app.data.demo.DemoAuthRepository
+import com.medk.app.data.demo.DemoCatalogRepository
+import com.medk.app.data.demo.DemoChatRepository
+import com.medk.app.data.demo.DemoNotificationRepository
+import com.medk.app.data.demo.DemoOrderRepository
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
@@ -34,7 +40,8 @@ class AppContainer(val context: Context) {
 
     val firebaseConfigured: Boolean = runCatching { FirebaseApp.getApps(context).isNotEmpty() }.getOrDefault(false)
     val backendConfigured: Boolean = BuildConfig.SUPABASE_URL.startsWith("https://") && BuildConfig.SUPABASE_ANON_KEY.isNotBlank()
-    val isConfigured get() = firebaseConfigured && backendConfigured
+    val isDemo: Boolean = BuildConfig.DEMO
+    val isConfigured get() = isDemo || (firebaseConfigured && backendConfigured)
 
     val firebaseAuth: FirebaseAuth? by lazy { if (firebaseConfigured) FirebaseAuth.getInstance() else null }
 
@@ -51,11 +58,11 @@ class AppContainer(val context: Context) {
 
     val settings by lazy { SettingsRepository(context) }
     val edge by lazy { EdgeFunctions(this) }
-    val auth by lazy { AuthRepository(this) }
-    val catalog by lazy { CatalogRepository(this) }
+    val auth: AuthRepository by lazy { if (isDemo) DemoAuthRepository(this) else AuthRepository(this) }
+    val catalog: CatalogRepository by lazy { if (isDemo) DemoCatalogRepository(this) else CatalogRepository(this) }
     val cart by lazy { CartRepository(context, json) }
-    val orders by lazy { OrderRepository(this) }
-    val chat by lazy { ChatRepository(this) }
-    val admin by lazy { AdminRepository(this) }
-    val notifications by lazy { NotificationRepository(this) }
+    val orders: OrderRepository by lazy { if (isDemo) DemoOrderRepository(this) else OrderRepository(this) }
+    val chat: ChatRepository by lazy { if (isDemo) DemoChatRepository(this) else ChatRepository(this) }
+    val admin: AdminRepository by lazy { if (isDemo) DemoAdminRepository(this) else AdminRepository(this) }
+    val notifications: NotificationRepository by lazy { if (isDemo) DemoNotificationRepository(this) else NotificationRepository(this) }
 }

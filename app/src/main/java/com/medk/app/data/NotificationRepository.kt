@@ -29,9 +29,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** In-app notifications table + realtime → optional Android system notifications. */
-class NotificationRepository(private val c: AppContainer) {
-    private val _unread = MutableStateFlow(0)
-    val unread: StateFlow<Int> = _unread.asStateFlow()
+open class NotificationRepository(private val c: AppContainer) {
+    protected val _unread = MutableStateFlow(0)
+    open val unread: StateFlow<Int> = _unread.asStateFlow()
 
     /** Conversation the user is currently viewing (no system notification for it). */
     var activeConversationId: String? = null
@@ -39,7 +39,7 @@ class NotificationRepository(private val c: AppContainer) {
     private var channel: RealtimeChannel? = null
     private var job: Job? = null
 
-    suspend fun list(): List<AppNotification> {
+    open suspend fun list(): List<AppNotification> {
         val uid = c.auth.currentUid ?: return emptyList()
         val l = c.supabase.from("notifications").select {
             filter { eq("user_id", uid) }; order("created_at", Order.DESCENDING); limit(100)
@@ -48,18 +48,18 @@ class NotificationRepository(private val c: AppContainer) {
         return l
     }
 
-    suspend fun markAllRead() {
+    open suspend fun markAllRead() {
         val uid = c.auth.currentUid ?: return
         c.supabase.from("notifications").update({ set("is_read", true) }) { filter { eq("user_id", uid); eq("is_read", false) } }
         _unread.value = 0
     }
 
-    suspend fun markRead(id: String) {
+    open suspend fun markRead(id: String) {
         c.supabase.from("notifications").update({ set("is_read", true) }) { filter { eq("id", id) } }
         _unread.value = (_unread.value - 1).coerceAtLeast(0)
     }
 
-    fun start(uid: String) {
+    open fun start(uid: String) {
         stop()
         job = c.appScope.launch {
             runCatching { list() }
@@ -81,7 +81,7 @@ class NotificationRepository(private val c: AppContainer) {
         }
     }
 
-    fun stop() {
+    open fun stop() {
         job?.cancel(); job = null
         val ch = channel; channel = null
         if (ch != null) c.appScope.launch { runCatching { c.supabase.realtime.removeChannel(ch) } }
@@ -89,7 +89,7 @@ class NotificationRepository(private val c: AppContainer) {
     }
 
     @SuppressLint("MissingPermission")
-    private fun show(n: AppNotification) {
+    protected fun show(n: AppNotification) {
         val ctx = c.context
         if (android.os.Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return

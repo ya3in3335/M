@@ -365,7 +365,7 @@ private fun Bubble(m: Message, mine: Boolean, nav: NavHostController) {
                 }
                 "pdf" -> Row(Modifier.clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(.25f)).clickable(enabled = url != null) {
                     scope.launch {
-                        try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                        try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }
                         catch (_: ActivityNotFoundException) { toast("لا يوجد تطبيق لفتح ملفات PDF") }
                     }
                 }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {

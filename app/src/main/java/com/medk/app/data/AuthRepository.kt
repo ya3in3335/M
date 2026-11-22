@@ -37,13 +37,13 @@ sealed interface AuthState {
 class GoogleSignInCancelled : Exception("cancelled")
 
 /** Firebase Authentication (email/password + Google) bridged to the MED-K backend profile. */
-class AuthRepository(private val c: AppContainer) {
+open class AuthRepository(private val c: AppContainer) {
 
-    private val _state = MutableStateFlow<AuthState>(AuthState.Loading)
-    val state: StateFlow<AuthState> = _state.asStateFlow()
+    protected val _state = MutableStateFlow<AuthState>(AuthState.Loading)
+    open val state: StateFlow<AuthState> = _state.asStateFlow()
 
-    val currentUid: String? get() = c.firebaseAuth?.currentUser?.uid
-    val profile: Profile? get() = (state.value as? AuthState.SignedIn)?.profile
+    open val currentUid: String? get() = c.firebaseAuth?.currentUser?.uid
+    open val profile: Profile? get() = (state.value as? AuthState.SignedIn)?.profile
 
     init {
         if (!c.isConfigured) _state.value = AuthState.NotConfigured
@@ -52,7 +52,7 @@ class AuthRepository(private val c: AppContainer) {
     }
 
     /** Re-validates the stored Firebase session with the server at app start. */
-    suspend fun restore() {
+    open suspend fun restore() {
         _state.value = AuthState.Loading
         _state.value = runCatching { AuthState.SignedIn(bootstrap(null)) }.getOrElse { e ->
             if (e.message?.contains("account_disabled") == true || e.message?.contains("invalid token") == true) {
@@ -72,13 +72,13 @@ class AuthRepository(private val c: AppContainer) {
         return p
     }
 
-    suspend fun signIn(email: String, password: String) {
+    open suspend fun signIn(email: String, password: String) {
         val auth = c.firebaseAuth ?: error("Firebase not configured")
         auth.signInWithEmailAndPassword(email.trim(), password).await()
         finishSignIn(null)
     }
 
-    suspend fun register(name: String, email: String, password: String) {
+    open suspend fun register(name: String, email: String, password: String) {
         val auth = c.firebaseAuth ?: error("Firebase not configured")
         val result = auth.createUserWithEmailAndPassword(email.trim(), password).await()
         result.user?.updateProfile(userProfileChangeRequest { displayName = name.trim() })?.await()
@@ -86,14 +86,14 @@ class AuthRepository(private val c: AppContainer) {
         finishSignIn(name.trim())
     }
 
-    suspend fun sendPasswordReset(email: String) {
+    open suspend fun sendPasswordReset(email: String) {
         val auth = c.firebaseAuth ?: error("Firebase not configured")
         auth.setLanguageCode("ar")
         auth.sendPasswordResetEmail(email.trim()).await()
     }
 
     /** Google Sign-In via Credential Manager → Firebase credential. */
-    suspend fun signInWithGoogle(activityContext: Context) {
+    open suspend fun signInWithGoogle(activityContext: Context) {
         val auth = c.firebaseAuth ?: error("Firebase not configured")
         val clientId = webClientId(activityContext)
         require(clientId.isNotBlank()) { "لم يتم إعداد Google Web Client ID" }
@@ -131,29 +131,29 @@ class AuthRepository(private val c: AppContainer) {
         }
     }
 
-    suspend fun refreshProfile() {
+    open suspend fun refreshProfile() {
         val uid = currentUid ?: return
         val p = c.supabase.from("profiles").select { filter { eq("id", uid) } }.decodeSingle<Profile>()
         _state.value = AuthState.SignedIn(p)
     }
 
-    suspend fun updateName(name: String) {
+    open suspend fun updateName(name: String) {
         val uid = currentUid ?: return
         c.firebaseAuth?.currentUser?.updateProfile(userProfileChangeRequest { displayName = name })?.await()
         c.supabase.from("profiles").update({ set("full_name", name) }) { filter { eq("id", uid) } }
         refreshProfile()
     }
 
-    val isPasswordAccount: Boolean
+    open val isPasswordAccount: Boolean
         get() = c.firebaseAuth?.currentUser?.providerData?.any { it.providerId == EmailAuthProvider.PROVIDER_ID } == true
 
-    suspend fun changePassword(current: String, newPassword: String) {
+    open suspend fun changePassword(current: String, newPassword: String) {
         val user = c.firebaseAuth?.currentUser ?: error("not signed in")
         user.reauthenticate(EmailAuthProvider.getCredential(user.email ?: "", current)).await()
         user.updatePassword(newPassword).await()
     }
 
-    suspend fun signOut(context: Context) {
+    open suspend fun signOut(context: Context) {
         c.notifications.stop()
         c.firebaseAuth?.signOut()
         runCatching { CredentialManager.create(context).clearCredentialState(androidx.credentials.ClearCredentialStateRequest()) }

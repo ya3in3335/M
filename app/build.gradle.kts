@@ -40,6 +40,21 @@ android {
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${cfg("GOOGLE_WEB_CLIENT_ID")}\"")
         buildConfigField("Boolean", "HAS_GOOGLE_SERVICES", hasGoogleServices.toString())
         resourceConfigurations += listOf("ar", "en")
+        buildConfigField("Boolean", "DEMO", "false")
+    }
+
+    // prod  = real Firebase + Supabase backend
+    // demo  = no backend at all, in-memory sample data (for trying the app)
+    flavorDimensions += "mode"
+    productFlavors {
+        create("prod") { dimension = "mode" }
+        create("demo") {
+            dimension = "mode"
+            applicationIdSuffix = ".demo"
+            versionNameSuffix = "-demo"
+            buildConfigField("Boolean", "DEMO", "true")
+            resValue("string", "app_name", "MED-K Demo")
+        }
     }
 
     signingConfigs {
@@ -93,6 +108,9 @@ android {
         checkReleaseBuilds = false
     }
 }
+
+// The demo flavor has its own applicationId and never talks to Firebase.
+tasks.matching { it.name.contains("Demo") && it.name.contains("GoogleServices") }.configureEach { enabled = false }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
