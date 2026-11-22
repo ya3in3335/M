@@ -1,0 +1,356 @@
+package com.medk.app.ui.auth
+
+import android.util.Patterns
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.medk.app.MedkApp
+import com.medk.app.core.friendly
+import com.medk.app.data.GoogleSignInCancelled
+import com.medk.app.ui.components.EmptyBox
+import com.medk.app.ui.components.MedkMark
+import com.medk.app.ui.components.MedkTextField
+import com.medk.app.ui.components.MedkTopBar
+import com.medk.app.ui.components.MedkWordmark
+import com.medk.app.ui.components.PrimaryButton
+import com.medk.app.ui.components.SecondaryButton
+import com.medk.app.ui.components.categoryIcon
+import com.medk.app.ui.theme.MedkColors
+import com.medk.app.ui.theme.categoryPalette
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+// ===================================================================== VM
+class AuthViewModel : ViewModel() {
+    private val repo = MedkApp.container.auth
+    private val _busy = MutableStateFlow<String?>(null) // "email" | "google" | null
+    val busy = _busy.asStateFlow()
+    private val _error = MutableStateFlow<String?>(null)
+    val error = _error.asStateFlow()
+    private val _resetSent = MutableStateFlow(false)
+    val resetSent = _resetSent.asStateFlow()
+
+    fun clearError() { _error.value = null }
+
+    private fun run(kind: String, block: suspend () -> Unit) {
+        if (_busy.value != null) return
+        viewModelScope.launch {
+            _busy.value = kind; _error.value = null
+            try { block() } catch (_: GoogleSignInCancelled) {
+            } catch (e: Exception) { _error.value = e.friendly() } finally { _busy.value = null }
+        }
+    }
+
+    fun login(email: String, password: String) = run("email") { repo.signIn(email, password) }
+    fun register(name: String, email: String, password: String) = run("email") { repo.register(name, email, password) }
+    fun google(ctx: android.content.Context) = run("google") { repo.signInWithGoogle(ctx) }
+    fun reset(email: String) = run("email") { repo.sendPasswordReset(email); _resetSent.value = true }
+}
+
+private fun validEmail(s: String) = Patterns.EMAIL_ADDRESS.matcher(s.trim()).matches()
+
+// ================================================================= splash
+@Composable
+fun SplashScreen() {
+    val scale = remember { Animatable(.6f) }
+    val alpha = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        launch { scale.animateTo(1f, tween(700, easing = FastOutSlowInEasing)) }
+        alpha.animateTo(1f, tween(600))
+    }
+    val t = rememberInfiniteTransition(label = "dots")
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF1A0B33), MedkColors.Black, MedkColors.Black))),
+        contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.scale(scale.value).alpha(alpha.value)) {
+            MedkMark(104.dp)
+            Spacer(Modifier.height(20.dp))
+            MedkWordmark(40.sp, subtitle = true)
+        }
+        Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 72.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            repeat(3) { i ->
+                val a by t.animateFloat(.25f, 1f, infiniteRepeatable(tween(600, delayMillis = i * 180), RepeatMode.Reverse), label = "d$i")
+                Box(Modifier.size(10.dp).alpha(a).clip(CircleShape).background(MedkColors.Violet))
+            }
+        }
+    }
+}
+
+// ================================================================ welcome
+@Composable
+fun WelcomeScreen(onLogin: () -> Unit, onRegister: () -> Unit) {
+    val t = rememberInfiniteTransition(label = "float")
+    val y by t.animateFloat(-6f, 6f, infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "y")
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().navigationBarsPadding()
+        .padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Spacer(Modifier.height(12.dp))
+        MedkWordmark(28.sp)
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(260.dp).clip(CircleShape).background(Brush.radialGradient(listOf(MedkColors.Purple.copy(.35f), Color.Transparent))))
+            MedkMark(120.dp, Modifier.offset(y = y.dp))
+            listOf("gaming" to (-100 to -70), "subscriptions" to (100 to -80), "accounts" to (-110 to 80),
+                "p2p" to (105 to 75), "other" to (0 to 125)).forEach { (key, pos) ->
+                val p = categoryPalette(key)
+                Box(Modifier.offset(pos.first.dp, (pos.second - y / 2).dp).size(52.dp).clip(RoundedCornerShape(16.dp)).background(p.brush),
+                    contentAlignment = Alignment.Center) { Icon(categoryIcon(key), null, tint = Color.White) }
+            }
+        }
+        Text("كل خدماتك الرقمية في مكان واحد", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(8.dp))
+        Text("شحن الألعاب، اشتراكات التطبيقات، الحسابات، العملات الرقمية P2P وبطاقات الهدايا — بأمان وسرعة مع فريق مبيعات حقيقي.",
+            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(28.dp))
+        PrimaryButton("تسجيل الدخول", onLogin)
+        Spacer(Modifier.height(12.dp))
+        SecondaryButton("إنشاء حساب", onRegister)
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+// ================================================================== shared
+@Composable
+private fun AuthScaffold(title: String, subtitle: String, onBack: () -> Unit, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
+        MedkTopBar("", onBack = onBack)
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().navigationBarsPadding()
+            .padding(horizontal = 24.dp)) {
+            MedkMark(56.dp)
+            Spacer(Modifier.height(16.dp))
+            Text(title, style = MaterialTheme.typography.headlineMedium)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(24.dp))
+            content()
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun ErrorBanner(msg: String?) {
+    if (msg == null) return
+    Surface(color = MedkColors.Danger.copy(.12f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, MedkColors.Danger.copy(.4f)),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+        Text(msg, color = MedkColors.Danger, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(12.dp))
+    }
+}
+
+@Composable
+private fun GoogleButton(loading: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    Surface(onClick = onClick, enabled = enabled && !loading, shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        modifier = Modifier.fillMaxWidth().height(52.dp)) {
+        Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            if (loading) androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MedkColors.Violet)
+            else {
+                Box(Modifier.size(24.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
+                    Text("G", color = Color(0xFF4285F4), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+                }
+                Spacer(Modifier.width(10.dp))
+                Text("المتابعة باستخدام Google", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrDivider() {
+    Row(Modifier.fillMaxWidth().padding(vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+        HorizontalDivider(Modifier.weight(1f))
+        Text("  أو  ", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        HorizontalDivider(Modifier.weight(1f))
+    }
+}
+
+// =================================================================== login
+@Composable
+fun LoginScreen(onBack: () -> Unit, onRegister: () -> Unit, onForgot: () -> Unit, vm: AuthViewModel = viewModel()) {
+    val busy by vm.busy.collectAsStateWithLifecycle()
+    val error by vm.error.collectAsStateWithLifecycle()
+    val ctx = LocalContext.current
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var submitted by remember { mutableStateOf(false) }
+    val emailErr = if (submitted && !validEmail(email)) "أدخل بريداً إلكترونياً صحيحاً" else null
+    val passErr = if (submitted && password.isEmpty()) "أدخل كلمة المرور" else null
+
+    AuthScaffold("تسجيل الدخول", "مرحباً بعودتك إلى MED-K", onBack) {
+        ErrorBanner(error)
+        MedkTextField(email, { email = it; vm.clearError() }, "البريد الإلكتروني", leading = Icons.Filled.Email,
+            keyboardType = KeyboardType.Email, error = emailErr)
+        Spacer(Modifier.height(12.dp))
+        MedkTextField(password, { password = it; vm.clearError() }, "كلمة المرور", leading = Icons.Filled.Lock, isPassword = true, error = passErr)
+        TextButton(onClick = onForgot) {
+            Text("نسيت كلمة المرور؟", color = MedkColors.Violet)
+        }
+        Spacer(Modifier.height(8.dp))
+        PrimaryButton("تسجيل الدخول", {
+            submitted = true
+            if (validEmail(email) && password.isNotEmpty()) vm.login(email, password)
+        }, loading = busy == "email", enabled = busy == null)
+        OrDivider()
+        GoogleButton(busy == "google", busy == null) { vm.google(ctx) }
+        Spacer(Modifier.height(16.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            Text("ليس لديك حساب؟", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton(onClick = onRegister) { Text("إنشاء حساب", color = MedkColors.Violet, fontWeight = FontWeight.Bold) }
+        }
+    }
+}
+
+// ================================================================ register
+@Composable
+fun RegisterScreen(onBack: () -> Unit, onLogin: () -> Unit, vm: AuthViewModel = viewModel()) {
+    val busy by vm.busy.collectAsStateWithLifecycle()
+    val error by vm.error.collectAsStateWithLifecycle()
+    val ctx = LocalContext.current
+    var name by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var confirm by rememberSaveable { mutableStateOf("") }
+    var submitted by remember { mutableStateOf(false) }
+    val nameErr = if (submitted && name.trim().length < 2) "أدخل اسمك الكامل" else null
+    val emailErr = if (submitted && !validEmail(email)) "أدخل بريداً إلكترونياً صحيحاً" else null
+    val passErr = if (submitted && password.length < 8) "8 أحرف على الأقل" else null
+    val confErr = if (submitted && confirm != password) "كلمتا المرور غير متطابقتين" else null
+
+    AuthScaffold("إنشاء حساب", "انضم إلى MED-K وابدأ التسوق", onBack) {
+        ErrorBanner(error)
+        MedkTextField(name, { name = it }, "الاسم الكامل", leading = Icons.Filled.Person, error = nameErr)
+        Spacer(Modifier.height(12.dp))
+        MedkTextField(email, { email = it; vm.clearError() }, "البريد الإلكتروني", leading = Icons.Filled.Email,
+            keyboardType = KeyboardType.Email, error = emailErr)
+        Spacer(Modifier.height(12.dp))
+        MedkTextField(password, { password = it }, "كلمة المرور", leading = Icons.Filled.Lock, isPassword = true, error = passErr)
+        Spacer(Modifier.height(12.dp))
+        MedkTextField(confirm, { confirm = it }, "تأكيد كلمة المرور", leading = Icons.Filled.Lock, isPassword = true, error = confErr)
+        Spacer(Modifier.height(20.dp))
+        PrimaryButton("إنشاء حساب", {
+            submitted = true
+            if (name.trim().length >= 2 && validEmail(email) && password.length >= 8 && confirm == password)
+                vm.register(name, email, password)
+        }, loading = busy == "email", enabled = busy == null)
+        OrDivider()
+        GoogleButton(busy == "google", busy == null) { vm.google(ctx) }
+        Spacer(Modifier.height(16.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            Text("لديك حساب بالفعل؟", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton(onClick = onLogin) { Text("تسجيل الدخول", color = MedkColors.Violet, fontWeight = FontWeight.Bold) }
+        }
+    }
+}
+
+// ================================================================ recovery
+@Composable
+fun ForgotPasswordScreen(onBack: () -> Unit, vm: AuthViewModel = viewModel()) {
+    val busy by vm.busy.collectAsStateWithLifecycle()
+    val error by vm.error.collectAsStateWithLifecycle()
+    val sent by vm.resetSent.collectAsStateWithLifecycle()
+    var email by rememberSaveable { mutableStateOf("") }
+    var submitted by remember { mutableStateOf(false) }
+
+    AuthScaffold("استعادة كلمة المرور", "أدخل بريدك وسنرسل لك رابط إعادة التعيين", onBack) {
+        if (sent) {
+            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MedkColors.Success.copy(.1f))
+                .border(1.dp, MedkColors.Success.copy(.4f), RoundedCornerShape(20.dp))) {
+                EmptyBox(Icons.Filled.CheckCircle, "تم إرسال الرابط",
+                    "تحقق من صندوق بريدك ($email) واتبع الرابط لتعيين كلمة مرور جديدة. تحقق أيضاً من مجلد الرسائل غير المرغوب فيها.",
+                    "العودة لتسجيل الدخول", onBack)
+            }
+        } else {
+            ErrorBanner(error)
+            MedkTextField(email, { email = it; vm.clearError() }, "البريد الإلكتروني", leading = Icons.Filled.Email,
+                keyboardType = KeyboardType.Email, error = if (submitted && !validEmail(email)) "أدخل بريداً إلكترونياً صحيحاً" else null)
+            Spacer(Modifier.height(20.dp))
+            PrimaryButton("إرسال رابط الاستعادة", {
+                submitted = true; if (validEmail(email)) vm.reset(email)
+            }, loading = busy != null)
+        }
+    }
+}
+
+/** Shown when Firebase / backend configuration is missing from the build. */
+@Composable
+fun NotConfiguredScreen() {
+    val c = MedkApp.container
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding(), contentAlignment = Alignment.Center) {
+        EmptyBox(Icons.Filled.Lock, "التطبيق غير مُهيأ",
+            buildString {
+                append("هذه النسخة بُنيت بدون إعدادات الخادم.\n")
+                if (!c.firebaseConfigured) append("• ملف google-services.json (Firebase) مفقود.\n")
+                if (!c.backendConfigured) append("• SUPABASE_URL / SUPABASE_ANON_KEY غير مضبوطة.\n")
+                append("راجع ملف README لإعداد GitHub Secrets.")
+            })
+    }
+}
+
+@Composable
+fun AuthFailedScreen(message: String, onRetry: () -> Unit, onSignOut: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().padding(24.dp),
+        verticalArrangement = Arrangement.Center) {
+        com.medk.app.ui.components.ErrorBox(message, onRetry)
+        SecondaryButton("تسجيل الخروج", { scope.launch { onSignOut() } })
+    }
+}
