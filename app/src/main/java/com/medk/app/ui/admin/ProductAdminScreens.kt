@@ -77,6 +77,7 @@ import com.medk.app.ui.components.loadVm
 import com.medk.app.ui.navigation.Routes
 import com.medk.app.ui.theme.MedkColors
 import kotlinx.coroutines.launch
+import com.medk.app.ui.theme.MedkShapes
 
 data class ProductAdminData(val products: List<Product>, val categories: List<Category>, val sections: List<Section>, val allowed: Set<String>?)
 
@@ -104,7 +105,7 @@ fun AdminProductsScreen(nav: NavHostController) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = { Box(Modifier.statusBarsPadding()) { MedkTopBar("إدارة المنتجات", onBack = { nav.popBackStack() }) } },
         floatingActionButton = {
-            ExtendedFloatingActionButton(onClick = { nav.navigate(Routes.productEdit()) }, containerColor = MedkColors.Purple, contentColor = Color.White,
+            ExtendedFloatingActionButton(onClick = { nav.navigate(Routes.productEdit()) }, shape = MedkShapes.ChamferSm, containerColor = MedkColors.Purple, contentColor = Color.White,
                 icon = { Icon(Icons.Filled.Add, null) }, text = { Text("منتج جديد") })
         },
     ) { pad ->
@@ -120,7 +121,7 @@ fun AdminProductsScreen(nav: NavHostController) {
                     items(list, key = { it.id }) { p ->
                         MedkCard(onClick = { nav.navigate(Routes.productEdit(p.id)) }, padding = PaddingValues(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(64.dp).clip(RoundedCornerShape(14.dp))) { NetImage(p.cover, Modifier.fillMaxSize()) }
+                                Box(Modifier.size(64.dp).clip(MedkShapes.Small)) { NetImage(p.cover, Modifier.fillMaxSize()) }
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(p.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -187,7 +188,7 @@ fun ProductEditScreen(id: String?, nav: NavHostController) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(images.toList()) { url ->
                         Box {
-                            Box(Modifier.size(96.dp).clip(RoundedCornerShape(16.dp))) { NetImage(url, Modifier.fillMaxSize()) }
+                            Box(Modifier.size(96.dp).clip(MedkShapes.Card)) { NetImage(url, Modifier.fillMaxSize()) }
                             Box(Modifier.align(Alignment.TopEnd).padding(4.dp).size(26.dp).clip(CircleShape).background(Color.Black.copy(.6f)),
                                 contentAlignment = Alignment.Center) {
                                 IconButton({ images.remove(url) }, Modifier.size(26.dp)) { Icon(Icons.Filled.Close, "إزالة", tint = Color.White, modifier = Modifier.size(16.dp)) }

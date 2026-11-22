@@ -10,6 +10,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -129,10 +130,12 @@ import com.medk.app.ui.profile.SettingsScreen
 import com.medk.app.ui.navigation.Routes
 import com.medk.app.ui.navigation.toTab
 import com.medk.app.ui.theme.MedkColors
+import com.medk.app.ui.theme.blueprintGrid
 import com.medk.app.ui.theme.MedkTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import com.medk.app.ui.theme.MedkShapes
 
 @Composable
 fun MedkRoot(pendingLink: MutableStateFlow<PendingLink?>) {
@@ -164,7 +167,11 @@ fun MedkRoot(pendingLink: MutableStateFlow<PendingLink?>) {
                         else -> AuthNav()
                     }
                 }
-                SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 80.dp))
+                SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 64.dp)) { d ->
+                    androidx.compose.material3.Snackbar(d, shape = MedkShapes.ChamferSm, containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        contentColor = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(horizontal = 12.dp)
+                            .border(1.dp, MedkColors.Violet.copy(.5f), MedkShapes.ChamferSm))
+                }
             }
         }
     }
@@ -228,12 +235,13 @@ private fun AppShell(profile: Profile, pendingLink: MutableStateFlow<PendingLink
     fun go(r: String) { scope.launch { drawer.close() }; if (r in Routes.tabs || r == Routes.WORKSPACE) nav.toTab(r) else nav.navigate(r) }
 
     ModalNavigationDrawer(drawerState = drawer, drawerContent = {
-        ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow, drawerShape = RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp)) {
+        ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow, drawerShape = RoundedCornerShape(topStart = 14.dp, bottomStart = 14.dp), modifier = Modifier.width(290.dp)) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(12.dp)) {
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(MedkColors.PrimaryGradient).padding(18.dp)) {
-                    Avatar(profile.displayName, profile.avatarUrl, 52.dp)
-                    Spacer(Modifier.height(10.dp))
-                    Text(profile.displayName, color = Color.White, style = MaterialTheme.typography.titleMedium)
+                Column(Modifier.fillMaxWidth().clip(MedkShapes.Chamfer).background(MedkColors.PrimaryGradient)
+                    .blueprintGrid(Color.White, 16f, .08f).padding(14.dp)) {
+                    Avatar(profile.displayName, profile.avatarUrl, 42.dp)
+                    Spacer(Modifier.height(8.dp))
+                    Text(profile.displayName, color = Color.White, style = MaterialTheme.typography.titleSmall)
                     Text(profile.email ?: "", color = Color.White.copy(.8f), style = MaterialTheme.typography.bodySmall)
                 }
                 Spacer(Modifier.height(12.dp))
@@ -311,12 +319,12 @@ private fun AppShell(profile: Profile, pendingLink: MutableStateFlow<PendingLink
 @Composable
 private fun DrawerItem(label: String, icon: ImageVector, selected: Boolean, badge: Int = 0, tint: Color? = null, onClick: () -> Unit) {
     NavigationDrawerItem(
-        label = { Text(label, style = MaterialTheme.typography.titleSmall, color = tint ?: Color.Unspecified) },
-        icon = { Icon(icon, null, tint = tint ?: if (selected) MedkColors.Violet else MaterialTheme.colorScheme.onSurfaceVariant) },
+        label = { Text(label, style = MaterialTheme.typography.labelLarge, color = tint ?: Color.Unspecified) },
+        icon = { Icon(icon, null, Modifier.size(19.dp), tint = tint ?: if (selected) MedkColors.Violet else MaterialTheme.colorScheme.onSurfaceVariant) },
         badge = { CountBadge(badge) }, selected = selected, onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
+        shape = MedkShapes.ChamferSm,
         colors = NavigationDrawerItemDefaults.colors(selectedContainerColor = MedkColors.Purple.copy(alpha = .18f)),
-        modifier = Modifier.padding(vertical = 2.dp),
+        modifier = Modifier.padding(vertical = 1.dp).height(44.dp),
     )
 }
 
@@ -331,23 +339,23 @@ private fun BottomBar(current: String?, cartCount: Int, onSelect: (String) -> Un
         Tab(Routes.CONVERSATIONS, "محادثاتي", Icons.Outlined.ChatBubbleOutline, Icons.AutoMirrored.Filled.Chat),
         Tab(Routes.PROFILE, "حسابي", Icons.Outlined.Person, Icons.Filled.Person),
     )
-    Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).navigationBarsPadding()
-        .padding(horizontal = 12.dp, vertical = 8.dp)) {
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(MaterialTheme.colorScheme.surfaceContainer)
-            .padding(vertical = 8.dp)) {
+    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow).navigationBarsPadding()) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
+        Row(Modifier.fillMaxWidth().height(56.dp)) {
             tabs.forEach { t ->
                 val sel = current == t.route
-                Column(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable { onSelect(t.route) }.padding(vertical = 4.dp),
+                Column(Modifier.weight(1f).fillMaxSize().clickable { onSelect(t.route) },
                     horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.width(if (sel) 26.dp else 0.dp).height(2.dp).background(MedkColors.PrimaryGradient))
+                    Spacer(Modifier.height(7.dp))
                     Box {
                         Icon(if (sel) t.selectedIcon else t.icon, t.label,
-                            tint = if (sel) MedkColors.Violet else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(26.dp))
-                        if (t.route == Routes.CART) CountBadge(cartCount, Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-6).dp))
+                            tint = if (sel) MedkColors.Violet else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(21.dp))
+                        if (t.route == Routes.CART) CountBadge(cartCount, Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-5).dp))
                     }
-                    Text(t.label, style = MaterialTheme.typography.labelMedium,
+                    Spacer(Modifier.height(2.dp))
+                    Text(t.label, style = MaterialTheme.typography.labelSmall,
                         color = if (sel) MedkColors.Violet else MaterialTheme.colorScheme.onSurfaceVariant)
-                    Box(Modifier.padding(top = 3.dp).width(if (sel) 28.dp else 0.dp).height(3.dp).clip(RoundedCornerShape(2.dp))
-                        .background(MedkColors.PrimaryGradient))
                 }
             }
         }

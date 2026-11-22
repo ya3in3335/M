@@ -69,6 +69,7 @@ import com.medk.app.ui.navigation.Routes
 import com.medk.app.ui.navigation.toTab
 import com.medk.app.ui.theme.MedkColors
 import kotlinx.coroutines.launch
+import com.medk.app.ui.theme.MedkShapes
 
 @Composable
 fun OrderCard(o: Order, onClick: () -> Unit, customerName: String? = null) {
@@ -173,7 +174,7 @@ fun OrderDetailScreen(id: String, nav: NavHostController) {
                         o.items.forEachIndexed { i, it ->
                             if (i > 0) HorizontalDivider(Modifier.padding(vertical = 8.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(54.dp).clip(RoundedCornerShape(12.dp))) { NetImage(it.imageUrl, Modifier.fillMaxSize()) }
+                                Box(Modifier.size(54.dp).clip(MedkShapes.Small)) { NetImage(it.imageUrl, Modifier.fillMaxSize()) }
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(it.productName, style = MaterialTheme.typography.titleSmall, maxLines = 2)
@@ -204,12 +205,12 @@ fun OrderDetailScreen(id: String, nav: NavHostController) {
                         OrderStatus.entries.filter { it != st }.forEach { s ->
                             SecondaryButton(s.label, {
                                 action.run(toast, { toast("تم تحديث الحالة إلى: ${s.label}"); vm.load(silent = true) }) { c.orders.updateStatus(o.id, s) }
-                            }, Modifier.weight(1f), enabled = !busy, height = 44.dp, color = com.medk.app.ui.components.statusColor(s))
+                            }, Modifier.weight(1f), enabled = !busy, height = 40.dp, color = com.medk.app.ui.components.statusColor(s))
                         }
                     }
                 }
                 if (isOwner) Box {
-                    SecondaryButton("إسناد إلى موظف", { assignMenu = true }, icon = Icons.Filled.PersonAdd, height = 46.dp)
+                    SecondaryButton("إسناد إلى موظف", { assignMenu = true }, icon = Icons.Filled.PersonAdd, height = 40.dp)
                     DropdownMenu(assignMenu, { assignMenu = false }) {
                         DropdownMenuItem({ Text("بدون إسناد") }, onClick = {
                             assignMenu = false

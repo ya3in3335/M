@@ -92,6 +92,7 @@ import com.medk.app.ui.theme.categoryPalette
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import com.medk.app.ui.theme.MedkShapes
 
 // --------------------------------------------------------------- helpers
 @Composable
@@ -100,7 +101,7 @@ private fun ManageScaffold(title: String, nav: NavHostController, fabLabel: Stri
         containerColor = MaterialTheme.colorScheme.background,
         topBar = { Box(Modifier.statusBarsPadding()) { MedkTopBar(title, onBack = { nav.popBackStack() }) } },
         floatingActionButton = {
-            if (fabLabel != null) ExtendedFloatingActionButton(onClick = onFab, containerColor = MedkColors.Purple, contentColor = Color.White,
+            if (fabLabel != null) ExtendedFloatingActionButton(onClick = onFab, shape = MedkShapes.ChamferSm, containerColor = MedkColors.Purple, contentColor = Color.White,
                 icon = { Icon(Icons.Filled.Add, null) }, text = { Text(fabLabel) })
         },
     ) { pad -> Box(Modifier.padding(pad)) { content() } }
@@ -144,7 +145,7 @@ fun AdminCategoriesScreen(nav: NavHostController) {
                     val p = categoryPalette(cat.colorKey ?: cat.slug)
                     MedkCard(onClick = { editing = cat }, padding = PaddingValues(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).background(p.brush), contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(46.dp).clip(MedkShapes.Small).background(p.brush), contentAlignment = Alignment.Center) {
                                 Icon(categoryIcon(cat.iconKey ?: cat.slug), null, tint = Color.White)
                             }
                             Spacer(Modifier.width(12.dp))
@@ -210,7 +211,7 @@ fun AdminSectionsScreen(nav: NavHostController) {
                     items(list, key = { it.id }) { s ->
                         MedkCard(onClick = { editing = s }, padding = PaddingValues(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))) {
+                                Box(Modifier.size(48.dp).clip(MedkShapes.Small)) {
                                     NetImage(s.imageUrl, Modifier.fillMaxSize(), palette = categoryPalette(cat.colorKey ?: cat.slug),
                                         placeholderIcon = categoryIcon(cat.iconKey))
                                 }
@@ -392,10 +393,10 @@ fun StaffDetailScreen(id: String, nav: NavHostController) {
                 MedkTextField(newPass, { newPass = it }, "كلمة المرور الجديدة (8 أحرف على الأقل)", leading = Icons.Filled.Lock, isPassword = true)
                 SecondaryButton("تعيين كلمة المرور", {
                     action.run(toast, { toast("تم تغيير كلمة المرور وتسجيل خروج الموظف من أجهزته"); newPass = "" }) { c.admin.setStaffPassword(id, newPass) }
-                }, enabled = newPass.length >= 8 && !busy, height = 46.dp)
+                }, enabled = newPass.length >= 8 && !busy, height = 40.dp)
                 Spacer(Modifier.height(4.dp))
                 SecondaryButton(if (d.profile.isActive) "إيقاف الحساب" else "تفعيل الحساب", { confirmToggle = true },
-                    color = if (d.profile.isActive) MedkColors.Danger else MedkColors.Success, height = 46.dp, enabled = !busy)
+                    color = if (d.profile.isActive) MedkColors.Danger else MedkColors.Success, height = 40.dp, enabled = !busy)
                 Spacer(Modifier.height(16.dp))
             }
             if (confirmToggle) AlertDialog({ confirmToggle = false },
@@ -430,7 +431,7 @@ fun AdminBannersScreen(nav: NavHostController) {
                 items(banners, key = { it.id }) { b ->
                     MedkCard(onClick = { editing = b }, padding = PaddingValues(10.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(width = 96.dp, height = 56.dp).clip(RoundedCornerShape(12.dp))) { NetImage(b.imageUrl, Modifier.fillMaxSize()) }
+                            Box(Modifier.size(width = 96.dp, height = 56.dp).clip(MedkShapes.Small)) { NetImage(b.imageUrl, Modifier.fillMaxSize()) }
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(b.title, style = MaterialTheme.typography.titleSmall)

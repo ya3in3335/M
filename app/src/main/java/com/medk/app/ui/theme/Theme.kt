@@ -22,9 +22,9 @@ import com.medk.app.R
 
 object MedkColors {
     val Black = Color(0xFF080808)
-    val Surface = Color(0xFF15131C)
-    val SurfaceHigh = Color(0xFF1E1B28)
-    val Stroke = Color(0xFF2C2838)
+    val Surface = Color(0xFF121118)
+    val SurfaceHigh = Color(0xFF1A1823)
+    val Stroke = Color(0xFF2A2735)
     val Purple = Color(0xFF762BDE)
     val Violet = Color(0xFFA64BFF)
     val White = Color(0xFFFFFFFF)
@@ -64,21 +64,21 @@ private fun s(size: Int, weight: FontWeight, line: Int = size + 8) =
     TextStyle(fontFamily = Cairo, fontSize = size.sp, fontWeight = weight, lineHeight = line.sp)
 
 private val MedkTypography = Typography(
-    displayLarge = s(40, FontWeight.ExtraBold, 48),
-    displayMedium = s(34, FontWeight.ExtraBold, 42),
-    displaySmall = s(28, FontWeight.ExtraBold, 36),
-    headlineLarge = s(26, FontWeight.Bold),
-    headlineMedium = s(22, FontWeight.Bold),
-    headlineSmall = s(20, FontWeight.Bold),
-    titleLarge = s(18, FontWeight.Bold),
-    titleMedium = s(16, FontWeight.Bold),
-    titleSmall = s(14, FontWeight.SemiBold),
-    bodyLarge = s(15, FontWeight.Normal),
-    bodyMedium = s(14, FontWeight.Normal),
-    bodySmall = s(12, FontWeight.Normal),
-    labelLarge = s(14, FontWeight.Bold),
-    labelMedium = s(12, FontWeight.SemiBold),
-    labelSmall = s(11, FontWeight.SemiBold),
+    displayLarge = s(30, FontWeight.ExtraBold, 38),
+    displayMedium = s(26, FontWeight.ExtraBold, 34),
+    displaySmall = s(22, FontWeight.ExtraBold, 30),
+    headlineLarge = s(20, FontWeight.Bold, 28),
+    headlineMedium = s(18, FontWeight.Bold, 26),
+    headlineSmall = s(17, FontWeight.Bold, 24),
+    titleLarge = s(15, FontWeight.Bold, 22),
+    titleMedium = s(14, FontWeight.Bold, 20),
+    titleSmall = s(13, FontWeight.SemiBold, 19),
+    bodyLarge = s(14, FontWeight.Normal, 21),
+    bodyMedium = s(13, FontWeight.Normal, 20),
+    bodySmall = s(11, FontWeight.Normal, 17),
+    labelLarge = s(13, FontWeight.Bold, 18),
+    labelMedium = s(11, FontWeight.SemiBold, 16),
+    labelSmall = s(10, FontWeight.SemiBold, 14),
 )
 
 private val DarkScheme = darkColorScheme(

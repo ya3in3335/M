@@ -62,6 +62,7 @@ import com.medk.app.ui.theme.MedkColors
 import com.medk.app.ui.theme.categoryPalette
 import kotlinx.coroutines.launch
 import java.util.Locale
+import com.medk.app.ui.theme.MedkShapes
 
 @Composable
 fun P2pScreen(nav: NavHostController, categoryState: UiState<CategoryData>, retry: () -> Unit) {
@@ -80,22 +81,24 @@ fun P2pScreen(nav: NavHostController, categoryState: UiState<CategoryData>, retr
         StateView(categoryState, retry) { data ->
             StateView(assets, { assetsVm.load() }) { list ->
                 val selected = list.firstOrNull { it.id == selectedId } ?: list.firstOrNull()
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(p.horizontal).padding(16.dp),
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth().clip(MedkShapes.Chamfer).background(MaterialTheme.colorScheme.surfaceContainer)
+                        .background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(p.start.copy(.35f), Color.Transparent)))
+                        .border(1.dp, p.accent.copy(.6f), MedkShapes.Chamfer).padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        CategoryArt("p2p", p, 70.dp)
+                        CategoryArt("p2p", p, 52.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("شراء وبيع العملات الرقمية", color = Color.White, style = MaterialTheme.typography.titleLarge)
-                            Text("تعامل مباشر وآمن مع فريق MED-K بالدينار الجزائري", color = Color.White.copy(.85f), style = MaterialTheme.typography.bodySmall)
+                            Text("شراء وبيع العملات الرقمية", style = MaterialTheme.typography.titleMedium)
+                            Text("تعامل مباشر وآمن مع فريق MED-K بالدينار الجزائري", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                     // buy / sell toggle
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceContainer).padding(4.dp)) {
+                    Row(Modifier.fillMaxWidth().clip(MedkShapes.ChamferSm).background(MaterialTheme.colorScheme.surfaceContainer).padding(3.dp)) {
                         listOf(true to "شراء", false to "بيع").forEach { (b, label) ->
-                            Box(Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
+                            Box(Modifier.weight(1f).clip(MedkShapes.Small)
                                 .background(if (buy == b) (if (b) MedkColors.Success else MedkColors.Danger) else Color.Transparent)
-                                .clickable { buy = b }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                .clickable { buy = b }.padding(vertical = 7.dp), contentAlignment = Alignment.Center) {
                                 Text(label, color = if (buy == b) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                                     style = MaterialTheme.typography.titleSmall)
                             }
@@ -155,12 +158,12 @@ fun P2pScreen(nav: NavHostController, categoryState: UiState<CategoryData>, retr
 
 @Composable
 private fun AssetRow(a: P2pAsset, buy: Boolean, selected: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(18.dp)
+    val shape = MedkShapes.Card
     Row(Modifier.fillMaxWidth().clip(shape).background(MaterialTheme.colorScheme.surfaceContainer)
         .border(if (selected) 2.dp else 1.dp, if (selected) MedkColors.Success else MaterialTheme.colorScheme.outlineVariant, shape)
-        .clickable(onClick = onClick).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).clip(CircleShape).background(categoryPalette("p2p").brush), contentAlignment = Alignment.Center) {
-            Text(a.code.take(4), color = Color.White, style = MaterialTheme.typography.labelMedium)
+        .clickable(onClick = onClick).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(38.dp).clip(com.medk.app.ui.theme.MedkShapes.Hex).background(categoryPalette("p2p").brush), contentAlignment = Alignment.Center) {
+            Text(a.code.take(4), color = Color.White, style = MaterialTheme.typography.labelSmall)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -174,7 +177,7 @@ private fun AssetRow(a: P2pAsset, buy: Boolean, selected: Boolean, onClick: () -
             }
         }
         Column(horizontalAlignment = Alignment.End) {
-            Text(dzd(if (buy) a.buyPriceDzd else a.sellPriceDzd), style = MaterialTheme.typography.titleMedium,
+            Text(dzd(if (buy) a.buyPriceDzd else a.sellPriceDzd), style = MaterialTheme.typography.titleSmall,
                 color = if (buy) MedkColors.Success else MedkColors.Danger)
             Text(if (buy) "سعر الشراء" else "سعر البيع", style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)

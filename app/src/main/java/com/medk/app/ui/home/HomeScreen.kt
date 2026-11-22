@@ -70,11 +70,15 @@ import com.medk.app.ui.components.loadVm
 import com.medk.app.ui.navigation.Routes
 import com.medk.app.ui.navigation.toTab
 import com.medk.app.ui.theme.MedkColors
+import com.medk.app.ui.theme.blueprintGrid
+import com.medk.app.ui.components.HexIcon
+import androidx.compose.ui.unit.sp
 import com.medk.app.ui.theme.categoryPalette
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.medk.app.ui.theme.MedkShapes
 
 data class HomeData(val categories: List<Category>, val banners: List<Banner>, val latest: List<Product>)
 
@@ -98,48 +102,53 @@ fun HomeScreen(nav: NavHostController, onMenu: () -> Unit, unread: Int) {
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         // header
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, "القائمة", modifier = Modifier.size(28.dp)) }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, "القائمة", modifier = Modifier.size(22.dp)) }
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                MedkWordmark(subtitle = true)
-                if (com.medk.app.BuildConfig.DEMO) com.medk.app.ui.components.Pill("تجريبي", MedkColors.Warning,
-                    Modifier.align(Alignment.TopStart))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    MedkWordmark(20.sp)
+                    if (com.medk.app.BuildConfig.DEMO) com.medk.app.ui.components.Pill("DEMO", MedkColors.Warning, Modifier.padding(start = 6.dp))
+                }
             }
             Box {
                 IconButton(onClick = { nav.navigate(Routes.NOTIFICATIONS) }) {
-                    Icon(Icons.Outlined.Notifications, "الإشعارات", modifier = Modifier.size(28.dp))
+                    Icon(Icons.Outlined.Notifications, "الإشعارات", modifier = Modifier.size(22.dp))
                 }
-                CountBadge(unread, Modifier.align(Alignment.TopEnd).offset(x = (-6).dp, y = 6.dp))
+                CountBadge(unread, Modifier.align(Alignment.TopEnd).offset(x = (-8).dp, y = 8.dp))
             }
         }
         // search bar
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().height(50.dp).clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer).border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
-            .clickable { nav.navigate(Routes.SEARCH) }.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.width(10.dp))
-            Text("ابحث عن لعبة، اشتراك أو خدمة…", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth().height(40.dp).clip(MedkShapes.ChamferSm)
+            .background(MaterialTheme.colorScheme.surfaceContainer).border(1.dp, MaterialTheme.colorScheme.outlineVariant, MedkShapes.ChamferSm)
+            .clickable { nav.navigate(Routes.SEARCH) }.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("ابحث عن لعبة، اشتراك أو خدمة…", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f))
         }
 
         PullToRefreshBox(refreshing, onRefresh = { vm.load(silent = true) }, modifier = Modifier.fillMaxSize()) {
             when (val s = state) {
                 is UiState.Loading -> Column(Modifier.padding(16.dp)) {
-                    Shimmer(Modifier.fillMaxWidth().height(170.dp)); Spacer(Modifier.height(20.dp))
-                    repeat(4) { Shimmer(Modifier.fillMaxWidth().height(100.dp)); Spacer(Modifier.height(12.dp)) }
+                    Shimmer(Modifier.fillMaxWidth().height(132.dp)); Spacer(Modifier.height(16.dp))
+                    repeat(5) { Shimmer(Modifier.fillMaxWidth().height(72.dp)); Spacer(Modifier.height(10.dp)) }
                 }
                 is UiState.Error -> ErrorBox(s.message, { vm.load() })
-                is UiState.Success -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                is UiState.Success -> LazyColumn(contentPadding = PaddingValues(16.dp, 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     item { BannerPager(s.data.banners) { slug -> if (slug != null) nav.navigate(Routes.category(slug)) else nav.toTab(Routes.CATEGORIES) } }
-                    item { SectionHeader("خدماتنا الرئيسية", action = "عرض الكل", onAction = { nav.toTab(Routes.CATEGORIES) }) }
-                    items(s.data.categories, key = { it.id }) { cat -> CategoryCard(cat, { nav.navigate(Routes.category(cat.slug)) }) }
+                    item { SectionHeader("خدماتنا الرئيسية", action = "عرض الكل", onAction = { nav.toTab(Routes.CATEGORIES) }, index = 1) }
+                    items(s.data.categories.size, key = { s.data.categories[it].id }) { i ->
+                        val cat = s.data.categories[i]
+                        CategoryCard(cat, { nav.navigate(Routes.category(cat.slug)) }, index = i + 1)
+                    }
                     if (s.data.latest.isNotEmpty()) {
-                        item { SectionHeader("أحدث المنتجات") }
+                        item { SectionHeader("أحدث المنتجات", index = 2) }
                         item {
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 items(s.data.latest, key = { it.id }) { p ->
                                     ProductCard(p, { nav.navigate(Routes.product(p.id)) }, onAdd = {
                                         scope.launch { c.cart.add(p, 1, null); toast("تمت الإضافة إلى السلة") }
-                                    }, modifier = Modifier.width(170.dp), isFavorite = p.id in favs,
+                                    }, modifier = Modifier.width(140.dp), isFavorite = p.id in favs,
                                         onFavorite = { scope.launch { runCatching { c.catalog.toggleFavorite(p.id) } } })
                                 }
                             }
@@ -161,13 +170,13 @@ internal fun BannerPager(banners: List<Banner>, onOpen: (String?) -> Unit) {
         if (count > 1) while (true) { delay(5000); pager.animateScrollToPage((pager.currentPage + 1) % count) }
     }
     Column {
-        HorizontalPager(pager, pageSpacing = 12.dp) { page ->
+        HorizontalPager(pager, pageSpacing = 10.dp) { page ->
             if (page == 0) WelcomeBanner { onOpen(null) } else RemoteBanner(banners[page - 1]) { onOpen(banners[page - 1].categorySlug) }
         }
-        if (count > 1) Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.Center) {
+        if (count > 1) Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.Center) {
             repeat(count) { i ->
                 val sel = pager.currentPage == i
-                Box(Modifier.padding(horizontal = 3.dp).height(8.dp).width(if (sel) 22.dp else 8.dp).clip(CircleShape)
+                Box(Modifier.padding(horizontal = 2.dp).height(3.dp).width(if (sel) 22.dp else 10.dp)
                     .background(if (sel) MedkColors.Violet else MaterialTheme.colorScheme.surfaceContainerHighest))
             }
         }
@@ -176,28 +185,29 @@ internal fun BannerPager(banners: List<Banner>, onOpen: (String?) -> Unit) {
 
 @Composable
 private fun WelcomeBanner(onBrowse: () -> Unit) {
-    val shape = RoundedCornerShape(24.dp)
-    Box(Modifier.fillMaxWidth().height(176.dp).clip(shape)
-        .background(Brush.linearGradient(listOf(Color(0xFF241046), Color(0xFF120A22), Color(0xFF2B0F5C))))
-        .border(1.dp, MedkColors.Purple.copy(.5f), shape)) {
-        // illustration (start side in RTL = right)
-        Box(Modifier.align(Alignment.CenterStart).padding(start = 8.dp).size(150.dp), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(140.dp).clip(CircleShape).background(Brush.radialGradient(listOf(MedkColors.Violet.copy(.45f), Color.Transparent))))
-            MedkMark(78.dp)
-            listOf("gaming" to (-48 to -46), "p2p" to (52 to -40), "subscriptions" to (54 to 44)).forEach { (k, o) ->
-                Box(Modifier.offset(o.first.dp, o.second.dp).size(32.dp).clip(RoundedCornerShape(10.dp)).background(categoryPalette(k).brush),
-                    contentAlignment = Alignment.Center) { Icon(categoryIcon(k), null, tint = Color.White, modifier = Modifier.size(18.dp)) }
+    val shape = MedkShapes.Chamfer
+    Box(Modifier.fillMaxWidth().height(132.dp).clip(shape)
+        .background(Brush.linearGradient(listOf(Color(0xFF1C0D38), Color(0xFF0E0A18), Color(0xFF241050))))
+        .blueprintGrid(Color.White, step = 18f, alpha = .05f)
+        .border(1.dp, Brush.horizontalGradient(listOf(MedkColors.Violet.copy(.8f), MedkColors.Purple.copy(.15f))), shape)) {
+        // geometric emblem (start side in RTL = right)
+        Box(Modifier.align(Alignment.CenterStart).padding(start = 14.dp).size(104.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(104.dp).clip(MedkShapes.Hex).background(MedkColors.Violet.copy(.18f)))
+            Box(Modifier.size(96.dp).clip(MedkShapes.Hex).background(Color(0xFF120B22)))
+            MedkMark(62.dp)
+            listOf("gaming" to (-44 to -34), "p2p" to (46 to -30), "subscriptions" to (44 to 34), "other" to (-44 to 32)).forEach { (k, o) ->
+                Box(Modifier.offset(o.first.dp, o.second.dp)) { HexIcon(categoryIcon(k), categoryPalette(k).brush, 22.dp) }
             }
         }
-        Column(Modifier.align(Alignment.CenterEnd).padding(end = 18.dp).fillMaxWidth(.55f)) {
-            Text("مرحباً بك في MED-K", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-            Text("كل خدماتك الرقمية في مكان واحد", color = Color.White.copy(.8f), style = MaterialTheme.typography.bodySmall)
-            Spacer(Modifier.height(12.dp))
-            Row(Modifier.clip(RoundedCornerShape(50)).background(MedkColors.PrimaryGradient).clickable(onClick = onBrowse)
-                .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("تصفح الخدمات", color = Color.White, style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.width(6.dp))
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White, modifier = Modifier.size(16.dp))
+        Column(Modifier.align(Alignment.CenterEnd).padding(end = 16.dp).fillMaxWidth(.56f)) {
+            Text("MED-K // DIGITAL", color = MedkColors.Violet, style = MaterialTheme.typography.labelSmall)
+            Text("كل خدماتك الرقمية\nفي مكان واحد", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.clip(MedkShapes.ChamferXs).background(MedkColors.PrimaryGradient).clickable(onClick = onBrowse)
+                .padding(horizontal = 12.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("تصفح الخدمات", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White, modifier = Modifier.size(13.dp))
             }
         }
     }
@@ -205,13 +215,13 @@ private fun WelcomeBanner(onBrowse: () -> Unit) {
 
 @Composable
 private fun RemoteBanner(b: Banner, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(24.dp)
-    Box(Modifier.fillMaxWidth().height(176.dp).clip(shape).clickable(onClick = onClick)) {
+    val shape = MedkShapes.Chamfer
+    Box(Modifier.fillMaxWidth().height(132.dp).clip(shape).clickable(onClick = onClick)) {
         NetImage(b.imageUrl, Modifier.fillMaxSize())
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color.Transparent, Color.Black.copy(.75f)))))
-        Column(Modifier.align(Alignment.CenterEnd).padding(18.dp).fillMaxWidth(.6f)) {
-            Text(b.title, color = Color.White, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (!b.subtitle.isNullOrBlank()) Text(b.subtitle, color = Color.White.copy(.85f), style = MaterialTheme.typography.bodySmall,
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color.Transparent, Color.Black.copy(.8f)))))
+        Column(Modifier.align(Alignment.CenterEnd).padding(16.dp).fillMaxWidth(.6f)) {
+            Text(b.title, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (!b.subtitle.isNullOrBlank()) Text(b.subtitle, color = Color.White.copy(.85f), style = MaterialTheme.typography.labelSmall,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }

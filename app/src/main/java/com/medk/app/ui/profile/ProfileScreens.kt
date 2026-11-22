@@ -89,18 +89,20 @@ import com.medk.app.ui.navigation.Routes
 import com.medk.app.ui.navigation.toTab
 import com.medk.app.ui.openSupport
 import com.medk.app.ui.theme.MedkColors
+import com.medk.app.ui.theme.blueprintGrid
 import kotlinx.coroutines.launch
+import com.medk.app.ui.theme.MedkShapes
 
 @Composable
 private fun MenuRow(icon: ImageVector, label: String, tint: Color = MedkColors.Violet, badge: Int = 0,
                     trailing: (@Composable () -> Unit)? = null, onClick: (() -> Unit)?) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).let { if (onClick != null) it.clickable(onClick = onClick) else it }
-        .padding(horizontal = 8.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(tint.copy(.14f)), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
+    Row(Modifier.fillMaxWidth().clip(MedkShapes.Small).let { if (onClick != null) it.clickable(onClick = onClick) else it }
+        .padding(horizontal = 6.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(30.dp).clip(MedkShapes.Hex).background(tint.copy(.14f)), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = tint, modifier = Modifier.size(15.dp))
         }
-        Spacer(Modifier.width(12.dp))
-        Text(label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f),
+        Spacer(Modifier.width(10.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f),
             color = if (tint == MedkColors.Danger) tint else MaterialTheme.colorScheme.onSurface)
         CountBadge(badge)
         if (trailing != null) trailing() else if (onClick != null)
@@ -120,15 +122,16 @@ fun ProfileScreen(nav: NavHostController, onMenu: () -> Unit) {
     val unread by c.notifications.unread.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         MedkTopBar("حسابي", navigationIcon = { IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, "القائمة") } })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(MedkColors.PrimaryGradient).padding(18.dp),
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth().clip(MedkShapes.Chamfer).background(MedkColors.PrimaryGradient)
+                .blueprintGrid(Color.White, 16f, .08f).padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(70.dp).clip(CircleShape).background(Color.White.copy(.2f)).padding(3.dp)) {
-                    Avatar(profile.displayName, profile.avatarUrl, 64.dp)
+                Box(Modifier.size(56.dp).clip(MedkShapes.Hex).background(Color.White.copy(.25f)), contentAlignment = Alignment.Center) {
+                    Avatar(profile.displayName, profile.avatarUrl, 50.dp)
                 }
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(profile.displayName, color = Color.White, style = MaterialTheme.typography.titleLarge)
+                    Text(profile.displayName, color = Color.White, style = MaterialTheme.typography.titleMedium)
                     Text(profile.email ?: "", color = Color.White.copy(.85f), style = MaterialTheme.typography.bodySmall)
                     if (profile.roleEnum != Role.CUSTOMER) Text(if (profile.roleEnum == Role.OWNER) "المالك" else "فريق المبيعات",
                         color = Color.White, style = MaterialTheme.typography.labelMedium,
@@ -168,7 +171,7 @@ fun SettingsScreen(nav: NavHostController) {
     val switchColors = SwitchDefaults.colors(checkedTrackColor = MedkColors.Purple)
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         MedkTopBar("الإعدادات", onBack = { nav.popBackStack() })
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("المظهر واللغة", style = MaterialTheme.typography.titleMedium)
             MedkCard(padding = PaddingValues(8.dp)) {
                 Column {
@@ -304,7 +307,7 @@ fun AboutScreen(nav: NavHostController) {
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         MedkTopBar("حول MED-K", onBack = { nav.popBackStack() })
         Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
             MedkMark(96.dp)
             MedkWordmark(subtitle = true)
             Text("MED-K سوق للخدمات الرقمية يجمع شحن الألعاب، اشتراكات التطبيقات، بيع الحسابات، تبادل العملات الرقمية P2P، بطاقات الهدايا وتراخيص البرامج في تطبيق واحد.",

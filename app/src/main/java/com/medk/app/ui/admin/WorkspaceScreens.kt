@@ -78,8 +78,10 @@ import com.medk.app.ui.navigation.Routes
 import com.medk.app.ui.navigation.toTab
 import com.medk.app.ui.orders.OrderCard
 import com.medk.app.ui.theme.MedkColors
+import com.medk.app.ui.theme.blueprintGrid
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import com.medk.app.ui.theme.MedkShapes
 
 data class WorkspaceData(val stats: DashboardStats, val incoming: List<Order>, val customers: Map<String, Profile>)
 
@@ -111,14 +113,20 @@ fun WorkspaceScreen(nav: NavHostController, onMenu: () -> Unit) {
         PullToRefreshBox(refreshing, { vm.load(silent = true) }) {
             StateView(state, { vm.load() }) { d ->
                 val s = d.stats
-                LazyVerticalGrid(GridCells.Fixed(2), contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                LazyVerticalGrid(GridCells.Fixed(2), contentPadding = PaddingValues(16.dp, 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     item(span = { GridItemSpan(2) }) {
-                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(MedkColors.PrimaryGradient).padding(18.dp)) {
-                            Text(if (isOwner) "إجمالي الإيرادات المؤكدة" else "إيرادات طلباتك المؤكدة", color = Color.White.copy(.85f),
-                                style = MaterialTheme.typography.labelLarge)
-                            Text(usd(s.revenueUsd), color = Color.White, style = MaterialTheme.typography.displaySmall)
-                            Text(dzd(s.revenueDzd), color = Color.White.copy(.85f), style = MaterialTheme.typography.titleSmall)
+                        Row(Modifier.fillMaxWidth().clip(MedkShapes.Chamfer).background(MedkColors.PrimaryGradient)
+                            .blueprintGrid(Color.White, 16f, .08f).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(if (isOwner) "الإيرادات المؤكدة" else "إيرادات طلباتك المؤكدة", color = Color.White.copy(.8f),
+                                    style = MaterialTheme.typography.labelMedium)
+                                Text(usd(s.revenueUsd), color = Color.White, style = MaterialTheme.typography.headlineMedium)
+                                Text(dzd(s.revenueDzd), color = Color.White.copy(.8f), style = MaterialTheme.typography.labelMedium)
+                            }
+                            Box(Modifier.size(46.dp).clip(MedkShapes.Hex).background(Color.White.copy(.18f)), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Filled.Paid, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                            }
                         }
                     }
                     item { StatCard("إجمالي الطلبات", "${s.totalOrders}", Icons.AutoMirrored.Filled.ReceiptLong, MedkColors.Violet) { nav.navigate(Routes.adminOrders()) } }
@@ -129,7 +137,7 @@ fun WorkspaceScreen(nav: NavHostController, onMenu: () -> Unit) {
                     if (isOwner) item { StatCard("غير مُسندة", "${s.unassignedOrders}", Icons.Filled.Groups, MedkColors.Danger) { nav.navigate(Routes.adminOrders()) } }
                     else item { StatCard("طلبات مغلقة", "${s.closedOrders}", Icons.AutoMirrored.Filled.ReceiptLong, Color(0xFF8E8A99)) { nav.navigate(Routes.adminOrders("closed")) } }
 
-                    item(span = { GridItemSpan(2) }) { SectionHeader("الإدارة") }
+                    item(span = { GridItemSpan(2) }) { SectionHeader("الإدارة", index = 1) }
                     item { Tile("الطلبات", Icons.AutoMirrored.Filled.ReceiptLong) { nav.navigate(Routes.adminOrders()) } }
                     item { Tile("المحادثات", Icons.AutoMirrored.Filled.Chat) { nav.toTab(Routes.CONVERSATIONS) } }
                     if (isOwner || me.canManageProducts) item { Tile("المنتجات", Icons.Filled.Inventory2, "${s.products}") { nav.navigate(Routes.ADMIN_PRODUCTS) } }
@@ -140,7 +148,7 @@ fun WorkspaceScreen(nav: NavHostController, onMenu: () -> Unit) {
                         item { Tile("البانرات", Icons.Filled.ViewCarousel) { nav.navigate(Routes.ADMIN_BANNERS) } }
                         item { Tile("أسعار P2P", Icons.Filled.CurrencyExchange) { nav.navigate(Routes.ADMIN_P2P) } }
                     }
-                    item(span = { GridItemSpan(2) }) { SectionHeader("الطلبات الواردة", action = "عرض الكل", onAction = { nav.navigate(Routes.adminOrders()) }) }
+                    item(span = { GridItemSpan(2) }) { SectionHeader("الطلبات الواردة", action = "عرض الكل", onAction = { nav.navigate(Routes.adminOrders()) }, index = 2) }
                     if (d.incoming.isEmpty()) item(span = { GridItemSpan(2) }) { EmptyBox(Icons.Filled.SpaceDashboard, "لا توجد طلبات بانتظار المعالجة") }
                     items(d.incoming, key = { it.id }, span = { GridItemSpan(2) }) { o ->
                         OrderCard(o, { nav.navigate(Routes.order(o.id)) }, customerName = d.customers[o.customerId]?.displayName)
@@ -153,26 +161,29 @@ fun WorkspaceScreen(nav: NavHostController, onMenu: () -> Unit) {
 
 @Composable
 private fun StatCard(label: String, value: String, icon: ImageVector, color: Color, onClick: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceContainer)
-        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(20.dp)).clickable(onClick = onClick).padding(14.dp)) {
-        Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(color.copy(.15f)), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = color, modifier = Modifier.size(20.dp))
+    Row(Modifier.fillMaxWidth().clip(MedkShapes.ChamferSm).background(MaterialTheme.colorScheme.surfaceContainer)
+        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MedkShapes.ChamferSm).clickable(onClick = onClick)
+        .padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(30.dp).clip(MedkShapes.Hex).background(color.copy(.16f)), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = color, modifier = Modifier.size(15.dp))
         }
-        Spacer(Modifier.height(10.dp))
-        Text(value, style = MaterialTheme.typography.headlineMedium)
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(9.dp))
+        Column {
+            Text(value, style = MaterialTheme.typography.titleLarge)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        }
     }
 }
 
 @Composable
 private fun Tile(label: String, icon: ImageVector, badge: String? = null, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surfaceContainer)
-        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(18.dp)).clickable(onClick = onClick).padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = MedkColors.Violet)
-        Spacer(Modifier.width(10.dp))
-        Text(label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (badge != null) Text(badge, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Row(Modifier.fillMaxWidth().clip(MedkShapes.ChamferSm).background(MaterialTheme.colorScheme.surfaceContainer)
+        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MedkShapes.ChamferSm).clickable(onClick = onClick)
+        .padding(horizontal = 10.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = MedkColors.Violet, modifier = Modifier.size(17.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (badge != null) Text(badge, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

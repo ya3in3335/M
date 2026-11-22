@@ -64,6 +64,7 @@ import com.medk.app.ui.navigation.Routes
 import com.medk.app.ui.navigation.toTab
 import com.medk.app.ui.theme.MedkColors
 import kotlinx.coroutines.launch
+import com.medk.app.ui.theme.MedkShapes
 
 @Composable
 fun CartScreen(nav: NavHostController, onMenu: () -> Unit) {
@@ -92,7 +93,7 @@ fun CartScreen(nav: NavHostController, onMenu: () -> Unit) {
                 "متابعة التسوق", { nav.toTab(Routes.HOME) })
             return@Column
         }
-        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp, 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(lines, key = { it.productId }) { line ->
                 CartRow(line, onOpen = { nav.navigate(Routes.product(line.productId)) },
                     onQty = { q -> scope.launch { c.cart.setQuantity(line.productId, q) } },
@@ -102,7 +103,7 @@ fun CartScreen(nav: NavHostController, onMenu: () -> Unit) {
                 MedkTextField(note, { note = it.take(500) }, "ملاحظة للبائع (اختياري) — مثل معرّف اللاعب ID", singleLine = false, minLines = 2)
             }
             if (sellerGroups > 1) item {
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MedkColors.Info.copy(.12f)).padding(12.dp),
+                Row(Modifier.fillMaxWidth().clip(MedkShapes.Card).background(MedkColors.Info.copy(.12f)).padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Info, null, tint = MedkColors.Info)
                     Spacer(Modifier.width(8.dp))
@@ -112,12 +113,12 @@ fun CartScreen(nav: NavHostController, onMenu: () -> Unit) {
             }
         }
         // summary
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("الإجمالي", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Text("الإجمالي", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(usd(lines.sumOf { it.priceUsd * it.quantity }), style = MaterialTheme.typography.headlineSmall, color = MedkColors.Violet)
+                    Text(usd(lines.sumOf { it.priceUsd * it.quantity }), style = MaterialTheme.typography.titleLarge, color = MedkColors.Violet)
                     Text(dzd(lines.sumOf { it.priceDzd * it.quantity }), style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -136,7 +137,7 @@ fun CartScreen(nav: NavHostController, onMenu: () -> Unit) {
                     }
                 }
             }, loading = busy, icon = Icons.Filled.SupportAgent)
-            SecondaryButton("متابعة التسوق", { nav.toTab(Routes.HOME) }, height = 44.dp)
+            SecondaryButton("متابعة التسوق", { nav.toTab(Routes.HOME) }, height = 40.dp)
         }
     }
     if (confirmClear) AlertDialog(onDismissRequest = { confirmClear = false },
@@ -147,9 +148,9 @@ fun CartScreen(nav: NavHostController, onMenu: () -> Unit) {
 
 @Composable
 private fun CartRow(line: CartLine, onOpen: () -> Unit, onQty: (Int) -> Unit, onRemove: () -> Unit) {
-    MedkCard(padding = PaddingValues(10.dp)) {
+    MedkCard(padding = PaddingValues(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(78.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onOpen)) { NetImage(line.image, Modifier.fillMaxSize()) }
+            Box(Modifier.size(56.dp).clip(MedkShapes.ChamferSm).clickable(onClick = onOpen)) { NetImage(line.image, Modifier.fillMaxSize()) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(line.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -159,7 +160,7 @@ private fun CartRow(line: CartLine, onOpen: () -> Unit, onQty: (Int) -> Unit, on
                 PriceBlock(line.priceUsd * line.quantity, line.priceDzd * line.quantity)
             }
             Column(horizontalAlignment = Alignment.End) {
-                IconButton(onRemove, Modifier.size(32.dp)) { Icon(Icons.Filled.DeleteOutline, "حذف", tint = MedkColors.Danger) }
+                IconButton(onRemove, Modifier.size(28.dp)) { Icon(Icons.Filled.DeleteOutline, "حذف", tint = MedkColors.Danger, modifier = Modifier.size(17.dp)) }
                 QuantitySelector(line.quantity, onQty, compact = true)
             }
         }

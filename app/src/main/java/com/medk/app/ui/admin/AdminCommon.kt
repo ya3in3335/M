@@ -48,6 +48,7 @@ import com.medk.app.ui.components.LocalToast
 import com.medk.app.ui.components.NetImage
 import com.medk.app.ui.theme.MedkColors
 import kotlinx.coroutines.launch
+import com.medk.app.ui.theme.MedkShapes
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,7 +59,7 @@ fun <T> DropdownField(label: String, options: List<Pair<T, String>>, selected: T
             value = options.firstOrNull { it.first == selected }?.second ?: "—", onValueChange = {}, readOnly = true,
             label = { Text(label) }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(open) },
             modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
-            shape = RoundedCornerShape(16.dp),
+            shape = MedkShapes.Card,
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MedkColors.Violet,
                 focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer),
         )
@@ -93,7 +94,7 @@ fun ImageUploadBox(url: String?, onUploaded: (String) -> Unit, size: Dp = 96.dp,
             uploading = false
         }
     }
-    Box(Modifier.size(size).clip(RoundedCornerShape(16.dp)).border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+    Box(Modifier.size(size).clip(MedkShapes.Card).border(1.dp, MaterialTheme.colorScheme.outline, MedkShapes.Card)
         .background(MaterialTheme.colorScheme.surfaceContainer)
         .clickable(enabled = !uploading) { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
         contentAlignment = Alignment.Center) {

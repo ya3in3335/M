@@ -68,6 +68,7 @@ import com.medk.app.ui.navigation.toTab
 import com.medk.app.ui.theme.MedkColors
 import com.medk.app.ui.theme.categoryPalette
 import kotlinx.coroutines.launch
+import com.medk.app.ui.theme.MedkShapes
 
 @Composable
 fun ProductScreen(id: String, nav: NavHostController) {
@@ -98,18 +99,18 @@ fun ProductScreen(id: String, nav: NavHostController) {
             val pager = rememberPagerState { images.size }
             val maxQty = product.stock ?: 99
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().aspectRatio(1.1f).clip(RoundedCornerShape(26.dp))) {
+                Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().aspectRatio(1.55f).clip(MedkShapes.Chamfer)) {
                     HorizontalPager(pager, Modifier.fillMaxSize()) { i ->
                         NetImage(images[i].ifBlank { null }, Modifier.fillMaxSize().clickable(enabled = images[i].isNotBlank()) {
                             nav.navigate(Routes.media(images[i], "image"))
                         }, palette = palette, placeholderIcon = categoryIcon(cat?.iconKey))
                     }
-                    Box(Modifier.align(Alignment.TopEnd).padding(12.dp).size(42.dp).clip(CircleShape).background(Color.Black.copy(.45f))
+                    Box(Modifier.align(Alignment.TopEnd).padding(10.dp).size(32.dp).clip(com.medk.app.ui.theme.MedkShapes.Hex).background(Color.Black.copy(.55f))
                         .clickable { scope.launch { try { c.catalog.toggleFavorite(product.id) } catch (e: Exception) { toast(e.friendly()) } } },
                         contentAlignment = Alignment.Center) {
                         val fav = product.id in favs
                         Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "المفضلة",
-                            tint = if (fav) MedkColors.Violet else Color.White)
+                            tint = if (fav) MedkColors.Violet else Color.White, modifier = Modifier.size(16.dp))
                     }
                     if (images.size > 1) Row(Modifier.align(Alignment.BottomCenter).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         repeat(images.size) { i ->
@@ -118,27 +119,27 @@ fun ProductScreen(id: String, nav: NavHostController) {
                         }
                     }
                 }
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         if (cat != null) Pill(cat.name, palette.accent)
                         if (section != null) Pill(section.name, MedkColors.Violet)
                     }
-                    Text(product.name, style = MaterialTheme.typography.headlineSmall)
+                    Text(product.name, style = MaterialTheme.typography.titleLarge)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         PriceBlock(product.priceUsd, product.priceDzd, Modifier.weight(1f), large = true)
                         if (product.inStock) Pill(product.stock?.let { "متوفر ($it)" } ?: "متوفر", MedkColors.Success, icon = Icons.Filled.CheckCircle)
                         else Pill("غير متوفر", MedkColors.Danger, icon = Icons.Filled.Cancel)
                     }
                     if (!product.description.isNullOrBlank()) {
-                        Text("الوصف", style = MaterialTheme.typography.titleMedium)
-                        Text(product.description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        com.medk.app.ui.components.SectionHeader("الوصف", index = 1)
+                        Text(product.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     if (product.inStock) Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("الكمية", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                        Text("الكمية", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                         QuantitySelector(qty, { qty = it.coerceIn(1, maxQty) }, max = maxQty)
                     }
                     if (product.inStock) Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("الإجمالي", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                        Text("الإجمالي", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                         PriceBlock(product.priceUsd * qty, product.priceDzd * qty)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -148,8 +149,9 @@ fun ProductScreen(id: String, nav: NavHostController) {
                     }
                 }
             }
-            Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow).navigationBarsPadding().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            com.medk.app.ui.components.TechRule()
+            Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 PrimaryButton(if (product.inStock) "أضف إلى السلة" else "غير متوفر حالياً", {
                     scope.launch { c.cart.add(product, qty, section?.name); toast("تمت إضافة ${product.name} إلى السلة") }
                 }, enabled = product.inStock, icon = Icons.Filled.AddShoppingCart)
@@ -157,7 +159,7 @@ fun ProductScreen(id: String, nav: NavHostController) {
                     scope.launch {
                         try { nav.navigate(Routes.chat(c.chat.start(product.id, null, product.name))) } catch (e: Exception) { toast(e.friendly()) }
                     }
-                }, icon = Icons.Filled.SupportAgent, height = 46.dp)
+                }, icon = Icons.Filled.SupportAgent, height = 40.dp)
             }
         }
     }

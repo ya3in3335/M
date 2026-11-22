@@ -112,6 +112,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.medk.app.ui.theme.MedkShapes
 
 // ========================================================= conversation list
 data class ConvItem(val conv: Conversation, val other: Profile?, val order: Order?)
@@ -147,7 +148,7 @@ fun ConversationsScreen(nav: NavHostController, onMenu: (() -> Unit)?) {
             StateView(state, { vm.load() }) { list ->
                 if (list.isEmpty()) EmptyBox(Icons.Filled.Forum, "لا توجد محادثات بعد",
                     "عند إتمام طلب أو التواصل مع بائع ستظهر المحادثة هنا", "تواصل مع الدعم", { openSupport(nav, scope, toast) })
-                else LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                else LazyColumn(contentPadding = PaddingValues(16.dp, 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(list, key = { it.conv.id }) { item -> ConversationRow(item, me) { nav.navigate(Routes.chat(item.conv.id)) } }
                 }
             }
@@ -164,9 +165,9 @@ private fun ConversationRow(item: ConvItem, me: Profile?, onClick: () -> Unit) {
         item.conv.staffId == null -> if (isTeam) "غير مُسندة" else "فريق MED-K"
         else -> "فريق MED-K"
     }
-    MedkCard(onClick = onClick, padding = PaddingValues(12.dp)) {
+    MedkCard(onClick = onClick, padding = PaddingValues(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(item.other?.displayName ?: "M", item.other?.avatarUrl, 50.dp)
+            Avatar(item.other?.displayName ?: "M", item.other?.avatarUrl, 40.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -288,7 +289,7 @@ fun ChatScreen(id: String, nav: NavHostController) {
                 is UiState.Loading -> LoadingBox()
                 is UiState.Error -> ErrorBox(s.message, { vm.load() })
                 is UiState.Success -> if (s.data.isEmpty()) EmptyBox(Icons.Filled.Forum, "ابدأ المحادثة", "اكتب رسالتك وسيرد عليك فريق MED-K")
-                else LazyColumn(state = listState, contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                else LazyColumn(state = listState, contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     items(s.data, key = { it.id }) { m -> Bubble(m, mine = m.senderId == me, nav) }
                 }
             }
@@ -306,14 +307,14 @@ fun ChatScreen(id: String, nav: NavHostController) {
                         attachMenu = false; pickPdf.launch("application/pdf") })
                 }
             }
-            OutlinedTextField(text, { text = it }, Modifier.weight(1f).heightIn(max = 140.dp), placeholder = { Text("اكتب رسالتك…") },
-                shape = RoundedCornerShape(22.dp), colors = OutlinedTextFieldDefaults.colors(
+            OutlinedTextField(text, { text = it }, Modifier.weight(1f).heightIn(max = 120.dp), placeholder = { Text("اكتب رسالتك…", style = MaterialTheme.typography.bodySmall) },
+                textStyle = MaterialTheme.typography.bodyMedium, shape = MedkShapes.ChamferSm, colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = MedkColors.Violet, unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer))
             Spacer(Modifier.width(6.dp))
-            Box(Modifier.size(50.dp).clip(CircleShape).background(MedkColors.PrimaryGradient)
+            Box(Modifier.size(44.dp).clip(MedkShapes.Hex).background(MedkColors.PrimaryGradient)
                 .clickable(enabled = text.isNotBlank() && !sending) { vm.send(text) { text = "" } }, contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Filled.Send, "إرسال", tint = Color.White)
+                Icon(Icons.AutoMirrored.Filled.Send, "إرسال", tint = Color.White, modifier = Modifier.size(18.dp))
             }
         }
     }
@@ -321,7 +322,7 @@ fun ChatScreen(id: String, nav: NavHostController) {
 
 @Composable
 private fun OrderStrip(order: Order, isTeam: Boolean, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clip(RoundedCornerShape(16.dp))
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clip(MedkShapes.Card)
         .background(MaterialTheme.colorScheme.surfaceContainer).clickable(onClick = onClick).padding(10.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.AutoMirrored.Filled.ReceiptLong, null, tint = MedkColors.Violet)
@@ -348,22 +349,22 @@ private fun Bubble(m: Message, mine: Boolean, nav: NavHostController) {
     var url by remember(m.id) { mutableStateOf<String?>(null) }
     LaunchedEffect(m.attachmentPath) { m.attachmentPath?.let { url = runCatching { c.chat.attachmentUrl(it) }.getOrNull() } }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.Start else Arrangement.End) {
-        Column(Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(
-            topStart = 18.dp, topEnd = 18.dp, bottomStart = if (mine) 4.dp else 18.dp, bottomEnd = if (mine) 18.dp else 4.dp))
+        Column(Modifier.widthIn(max = 280.dp).clip(androidx.compose.foundation.shape.CutCornerShape(
+            topStart = if (mine) 0.dp else 8.dp, topEnd = if (mine) 8.dp else 0.dp, bottomStart = 0.dp, bottomEnd = 0.dp))
             .background(if (mine) MedkColors.PrimaryGradient else androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.surfaceContainerHigh))
-            .padding(10.dp)) {
+            .padding(horizontal = 10.dp, vertical = 7.dp)) {
             when (m.attachmentType) {
-                "image" -> Box(Modifier.width(220.dp).height(180.dp).clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(.2f))
+                "image" -> Box(Modifier.width(220.dp).height(180.dp).clip(MedkShapes.Small).background(Color.Black.copy(.2f))
                     .clickable(enabled = url != null) { url?.let { nav.navigate(Routes.media(it, "image")) } }) {
                     if (url != null) AsyncImage(url, m.attachmentName, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 }
-                "video" -> Row(Modifier.clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(.25f))
+                "video" -> Row(Modifier.clip(MedkShapes.Small).background(Color.Black.copy(.25f))
                     .clickable(enabled = url != null) { url?.let { nav.navigate(Routes.media(it, "video")) } }.padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.PlayCircle, null, tint = Color.White, modifier = Modifier.size(36.dp))
                     Spacer(Modifier.width(8.dp)); Text(m.attachmentName ?: "فيديو", color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                "pdf" -> Row(Modifier.clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(.25f)).clickable(enabled = url != null) {
+                "pdf" -> Row(Modifier.clip(MedkShapes.Small).background(Color.Black.copy(.25f)).clickable(enabled = url != null) {
                     scope.launch {
                         try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }
                         catch (_: ActivityNotFoundException) { toast("لا يوجد تطبيق لفتح ملفات PDF") }
@@ -374,7 +375,7 @@ private fun Bubble(m: Message, mine: Boolean, nav: NavHostController) {
                 }
             }
             if (!m.body.isNullOrBlank()) Text(m.body, color = if (mine) Color.White else MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = if (m.attachmentType != null) 6.dp else 0.dp))
+                style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = if (m.attachmentType != null) 6.dp else 0.dp))
             Text(formatTime(m.createdAt), style = MaterialTheme.typography.labelSmall,
                 color = if (mine) Color.White.copy(.7f) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.End))
         }

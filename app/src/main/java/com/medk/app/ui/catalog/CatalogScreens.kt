@@ -81,8 +81,10 @@ import com.medk.app.ui.components.loadVm
 import com.medk.app.ui.navigation.Routes
 import com.medk.app.ui.theme.CategoryPalette
 import com.medk.app.ui.theme.categoryPalette
+import com.medk.app.ui.theme.blueprintGrid
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.medk.app.ui.theme.MedkShapes
 
 // ============================================================ all categories
 @Composable
@@ -96,7 +98,7 @@ fun CategoriesScreen(nav: NavHostController, onMenu: () -> Unit) {
             actions = { IconButton(onClick = { nav.navigate(Routes.SEARCH) }) { Icon(Icons.Filled.Search, "بحث") } })
         StateView(state, { vm.load() }) { (cats, sections) ->
             LazyVerticalGrid(GridCells.Fixed(2), contentPadding = PaddingValues(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(cats, key = { it.id }) { cat ->
                     CategoryTile(cat, sections.count { it.categoryId == cat.id && it.isActive }) { nav.navigate(Routes.category(cat.slug)) }
                 }
@@ -108,13 +110,17 @@ fun CategoriesScreen(nav: NavHostController, onMenu: () -> Unit) {
 @Composable
 private fun CategoryTile(cat: Category, sectionCount: Int, onClick: () -> Unit) {
     val p = categoryPalette(cat.colorKey ?: cat.slug)
-    Column(Modifier.fillMaxWidth().aspectRatio(.82f).clip(RoundedCornerShape(22.dp)).background(p.brush)
-        .border(1.dp, Color.White.copy(.12f), RoundedCornerShape(22.dp)).clickable(onClick = onClick).padding(14.dp)) {
-        CategoryArt(cat.iconKey ?: cat.slug, p, 74.dp)
-        Spacer(Modifier.weight(1f))
-        Text(cat.name, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(if (sectionCount > 0) "$sectionCount أقسام فرعية" else (cat.description ?: ""), color = Color.White.copy(.8f),
-            style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val shape = com.medk.app.ui.theme.MedkShapes.Chamfer
+    Column(Modifier.fillMaxWidth().clip(shape).background(MaterialTheme.colorScheme.surfaceContainer)
+        .background(Brush.verticalGradient(listOf(p.start.copy(.28f), Color.Transparent)))
+        .blueprintGrid(Color.White, 14f, .04f)
+        .border(1.dp, Brush.verticalGradient(listOf(p.accent.copy(.7f), MaterialTheme.colorScheme.outlineVariant)), shape)
+        .clickable(onClick = onClick).padding(12.dp)) {
+        CategoryArt(cat.iconKey ?: cat.slug, p, 46.dp)
+        Spacer(Modifier.height(10.dp))
+        Text(cat.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(if (sectionCount > 0) "$sectionCount أقسام فرعية" else (cat.description ?: ""), color = p.accent,
+            style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -147,14 +153,19 @@ fun CategoryScreen(slug: String, nav: NavHostController) {
 
 @Composable
 private fun CategoryHeader(cat: Category, p: CategoryPalette, extra: String) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(p.horizontal).padding(18.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        CategoryArt(cat.iconKey ?: cat.slug, p, 76.dp)
-        Spacer(Modifier.width(14.dp))
+    Row(Modifier.fillMaxWidth().clip(com.medk.app.ui.theme.MedkShapes.Chamfer)
+        .background(MaterialTheme.colorScheme.surfaceContainer)
+        .background(Brush.horizontalGradient(listOf(p.start.copy(.35f), Color.Transparent)))
+        .blueprintGrid(Color.White, 16f, .05f)
+        .border(1.dp, Brush.horizontalGradient(listOf(p.accent.copy(.7f), MaterialTheme.colorScheme.outlineVariant)), com.medk.app.ui.theme.MedkShapes.Chamfer)
+        .padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        CategoryArt(cat.iconKey ?: cat.slug, p, 52.dp)
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(cat.name, color = Color.White, style = MaterialTheme.typography.titleLarge)
-            if (!cat.description.isNullOrBlank()) Text(cat.description, color = Color.White.copy(.85f), style = MaterialTheme.typography.bodySmall)
-            Text(extra, color = Color.White.copy(.7f), style = MaterialTheme.typography.labelMedium)
+            Text(cat.name, style = MaterialTheme.typography.titleMedium)
+            if (!cat.description.isNullOrBlank()) Text(cat.description, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(extra, color = p.accent, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
@@ -163,15 +174,15 @@ private fun CategoryHeader(cat: Category, p: CategoryPalette, extra: String) {
 @Composable
 private fun SectionGridCategory(data: CategoryData, nav: NavHostController, tall: Boolean) {
     val p = categoryPalette(data.category.colorKey ?: data.category.slug)
-    LazyVerticalGrid(GridCells.Fixed(2), contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item(span = { GridItemSpan(2) }) {
+    LazyVerticalGrid(GridCells.Fixed(3), contentPadding = PaddingValues(16.dp, 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
             CategoryHeader(data.category, p, "${data.products.count { it.inStock }} منتج متوفر")
         }
-        item(span = { GridItemSpan(2) }) {
-            Text(if (tall) "اختر اللعبة" else "اختر التطبيق", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 6.dp))
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            com.medk.app.ui.components.SectionHeader(if (tall) "اختر اللعبة" else "اختر التطبيق", index = 1)
         }
-        if (data.sections.isEmpty()) item(span = { GridItemSpan(2) }) { EmptyBox(Icons.Filled.Inventory2, "لا توجد أقسام بعد") }
+        if (data.sections.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { EmptyBox(Icons.Filled.Inventory2, "لا توجد أقسام بعد") }
         items(data.sections, key = { it.id }) { s ->
             SectionTile(s, data.products.count { it.sectionId == s.id && it.inStock }, p, data.category.iconKey, tall) {
                 nav.navigate(Routes.section(s.id))
@@ -182,18 +193,17 @@ private fun SectionGridCategory(data: CategoryData, nav: NavHostController, tall
 
 @Composable
 fun SectionTile(s: Section, count: Int, p: CategoryPalette, iconKey: String?, tall: Boolean, onClick: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceContainer)
-        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(20.dp)).clickable(onClick = onClick)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(if (tall) 1f else 1.4f)) {
+    val shape = com.medk.app.ui.theme.MedkShapes.ChamferSm
+    Column(Modifier.fillMaxWidth().clip(shape).background(MaterialTheme.colorScheme.surfaceContainer)
+        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape).clickable(onClick = onClick)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(if (tall) 1.15f else 1.4f)) {
             NetImage(s.imageUrl, Modifier.fillMaxSize(), palette = p, placeholderIcon = categoryIcon(iconKey))
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(.55f)))))
-            Text(s.name, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.align(Alignment.BottomStart).padding(10.dp))
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (count > 0) "$count منتج" else "قريباً", style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = p.accent)
+        Box(Modifier.fillMaxWidth().height(2.dp).background(p.brush))
+        Column(Modifier.padding(horizontal = 7.dp, vertical = 5.dp)) {
+            Text(s.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (count > 0) "$count منتج" else "قريباً", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -205,8 +215,8 @@ private fun ProductsCategory(data: CategoryData, nav: NavHostController) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     val list = if (selected == null) data.products else data.products.filter { it.sectionId == selected }
     ProductGrid(list, nav, p, header = {
-        item(span = { GridItemSpan(2) }) { CategoryHeader(data.category, p, "${data.products.count { it.inStock }} منتج متوفر") }
-        if (data.sections.isNotEmpty()) item(span = { GridItemSpan(2) }) {
+        item(span = { GridItemSpan(maxLineSpan) }) { CategoryHeader(data.category, p, "${data.products.count { it.inStock }} منتج متوفر") }
+        if (data.sections.isNotEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 item { Chip("الكل", selected == null) { selected = null } }
                 items(data.sections, key = { it.id }) { s -> Chip(s.name, selected == s.id) { selected = s.id } }
@@ -218,7 +228,8 @@ private fun ProductsCategory(data: CategoryData, nav: NavHostController) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
-    FilterChip(selected, onClick, label = { Text(label) }, shape = RoundedCornerShape(50),
+    FilterChip(selected, onClick, label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+        shape = com.medk.app.ui.theme.MedkShapes.ChamferXs, modifier = Modifier.height(30.dp),
         colors = FilterChipDefaults.filterChipColors(selectedContainerColor = com.medk.app.ui.theme.MedkColors.Purple,
             selectedLabelColor = Color.White, containerColor = MaterialTheme.colorScheme.surfaceContainer))
 }
@@ -233,8 +244,8 @@ fun ProductGrid(
     val favs by c.catalog.favoriteIds.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val toast = LocalToast.current
-    LazyVerticalGrid(GridCells.Adaptive(160.dp), contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyVerticalGrid(GridCells.Adaptive(150.dp), contentPadding = PaddingValues(16.dp, 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         header()
         if (products.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { EmptyBox(Icons.Filled.Inventory2, emptyText) }
         items(products, key = { it.id }) { p ->
@@ -268,15 +279,17 @@ fun SectionScreen(id: String, nav: NavHostController) {
             PullToRefreshBox(refreshing, { vm.load(silent = true) }) {
                 ProductGrid(products, nav, p, header = {
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(p.horizontal).padding(14.dp),
+                        Row(Modifier.fillMaxWidth().clip(MedkShapes.Chamfer).background(MaterialTheme.colorScheme.surfaceContainer)
+                            .background(Brush.horizontalGradient(listOf(p.start.copy(.35f), Color.Transparent)))
+                            .border(1.dp, p.accent.copy(.5f), MedkShapes.Chamfer).padding(10.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(64.dp).clip(RoundedCornerShape(16.dp))) {
+                            Box(Modifier.size(48.dp).clip(MedkShapes.Hex)) {
                                 NetImage(section.imageUrl, Modifier.fillMaxSize(), palette = p, placeholderIcon = categoryIcon(cat?.iconKey))
                             }
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(section.name, color = Color.White, style = MaterialTheme.typography.titleLarge)
-                                Text(section.description ?: cat?.name.orEmpty(), color = Color.White.copy(.8f), style = MaterialTheme.typography.bodySmall)
+                                Text(section.name, style = MaterialTheme.typography.titleMedium)
+                                Text(section.description ?: cat?.name.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
@@ -286,7 +299,7 @@ fun SectionScreen(id: String, nav: NavHostController) {
                                 try { nav.navigate(Routes.chat(c.chat.start(null, section.id, "استفسار — ${section.name}"))) }
                                 catch (e: Exception) { toast(e.friendly()) }
                             }
-                        }, icon = Icons.Filled.SupportAgent, height = 46.dp)
+                        }, icon = Icons.Filled.SupportAgent, height = 40.dp)
                     }
                 }, emptyText = "لا توجد منتجات متاحة لـ ${section.name} حالياً", sectionNames = mapOf(section.id to section.name))
             }

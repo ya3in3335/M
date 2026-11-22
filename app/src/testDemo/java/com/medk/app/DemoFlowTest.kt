@@ -80,6 +80,25 @@ class DemoFlowTest {
         assertTrue(DemoStore.messages.any { it.body?.contains("استلمت طلبك") == true })
     }
 
+    @Test fun moreCustomerScreens() {
+        rule.setContent { MedkRoot(MutableStateFlow(null)) }
+        waitText("نسخة تجريبية")
+        rule.onNodeWithText("عميل").performClick()
+        waitText("خدماتنا الرئيسية")
+        rule.onAllNodesWithText("الأقسام").onFirst().performClick()
+        waitText("أقسام فرعية"); shot("11_categories")
+        rule.onNodeWithText("شراء وبيع العملات الرقمية P2P").performClick()
+        waitText("Tether"); shot("12_p2p")
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("رجوع")).performClick()
+        waitText("أقسام فرعية")
+        rule.onAllNodesWithText("حسابي").onFirst().performClick()
+        waitText("طلباتي"); shot("13_profile")
+        rule.onAllNodesWithText("طلباتي").onFirst().performClick()
+        waitText("MK-DEMO0001")
+        rule.onNodeWithText("MK-DEMO0001").performClick()
+        waitText("حالة التسليم"); shot("14_order")
+    }
+
     @Test fun ownerDashboard() {
         rule.setContent { MedkRoot(MutableStateFlow(null)) }
         waitText("نسخة تجريبية")
