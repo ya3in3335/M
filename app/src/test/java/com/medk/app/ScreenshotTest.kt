@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -87,4 +89,26 @@ class ScreenshotTest {
     }
 }
 
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(qualifiers = "w200dp-h200dp-xxhdpi")
+class IconScreenshotTest {
+    @get:Rule val rule = createComposeRule()
+    @Test fun launcherIcon() {
+        rule.setContent {
+            androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.White),
+                contentAlignment = androidx.compose.ui.Alignment.Center) {
+                androidx.compose.foundation.layout.Box(Modifier.androidxSize(160.dp)
+                    .androidxClip(androidx.compose.foundation.shape.RoundedCornerShape(36.dp))) {
+                    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.ic_launcher_background), null, Modifier.fillMaxSize())
+                    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.ic_launcher_foreground), null, Modifier.fillMaxSize())
+                }
+            }
+        }
+        rule.onRoot().captureRoboImage("screenshots/07_launcher_icon.png")
+    }
+}
+
+private fun Modifier.androidxSize(d: androidx.compose.ui.unit.Dp) = this.then(Modifier.size(d))
+private fun Modifier.androidxClip(s: androidx.compose.ui.graphics.Shape) = this.then(Modifier.clip(s))
 private fun Modifier.fillMaxWidthCompat() = this.then(Modifier.padding(0.dp))
