@@ -98,7 +98,7 @@ private fun MenuRow(icon: ImageVector, label: String, tint: Color = MedkColors.V
                     trailing: (@Composable () -> Unit)? = null, onClick: (() -> Unit)?) {
     Row(Modifier.fillMaxWidth().clip(MedkShapes.Small).let { if (onClick != null) it.clickable(onClick = onClick) else it }
         .padding(horizontal = 6.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(30.dp).clip(MedkShapes.Hex).background(tint.copy(.14f)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(30.dp).clip(MedkShapes.Emblem).background(tint.copy(.14f)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = tint, modifier = Modifier.size(15.dp))
         }
         Spacer(Modifier.width(10.dp))
@@ -126,7 +126,7 @@ fun ProfileScreen(nav: NavHostController, onMenu: () -> Unit) {
             Row(Modifier.fillMaxWidth().clip(MedkShapes.Chamfer).background(MedkColors.PrimaryGradient)
                 .blueprintGrid(Color.White, 16f, .08f).padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(56.dp).clip(MedkShapes.Hex).background(Color.White.copy(.25f)), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(56.dp).clip(MedkShapes.Emblem).background(Color.White.copy(.25f)), contentAlignment = Alignment.Center) {
                     Avatar(profile.displayName, profile.avatarUrl, 50.dp)
                 }
                 Spacer(Modifier.width(14.dp))

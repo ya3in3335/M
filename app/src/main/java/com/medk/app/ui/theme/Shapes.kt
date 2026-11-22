@@ -7,40 +7,17 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import kotlin.math.cos
-import kotlin.math.min
-import kotlin.math.sin
 
-/** Geometric shape language of MED-K: hexagons + chamfered corners. */
+/** Geometric shape language of MED-K: chamfered corners (from the MK logo). */
 object MedkShapes {
     val Chamfer = CutCornerShape(topStart = 12.dp, bottomEnd = 12.dp)
     val ChamferSm = CutCornerShape(topStart = 7.dp, bottomEnd = 7.dp)
     val ChamferXs = CutCornerShape(topStart = 4.dp, bottomEnd = 4.dp)
     val Card = RoundedCornerShape(10.dp)
     val Small = RoundedCornerShape(6.dp)
-    val Hex = HexagonShape()
-}
-
-/** Pointy-top regular hexagon fitted to the bounds. */
-class HexagonShape : Shape {
-    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        val r = min(size.width / 2f / cos(Math.toRadians(30.0)).toFloat(), size.height / 2f)
-        val cx = size.width / 2f; val cy = size.height / 2f
-        val p = Path()
-        for (i in 0 until 6) {
-            val a = Math.toRadians((-90 + 60 * i).toDouble())
-            val x = cx + r * cos(a).toFloat(); val y = cy + r * sin(a).toFloat()
-            if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
-        }
-        p.close()
-        return Outline.Generic(p)
-    }
+    /** Chamfered square — the MK logo frame, used for emblems/avatars/badges. */
+    val Emblem = CutCornerShape(topStartPercent = 28, topEndPercent = 0, bottomEndPercent = 28, bottomStartPercent = 0)
 }
 
 /** Faint engineering grid drawn behind content. */

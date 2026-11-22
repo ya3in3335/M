@@ -105,7 +105,7 @@ fun ProductScreen(id: String, nav: NavHostController) {
                             nav.navigate(Routes.media(images[i], "image"))
                         }, palette = palette, placeholderIcon = categoryIcon(cat?.iconKey))
                     }
-                    Box(Modifier.align(Alignment.TopEnd).padding(10.dp).size(32.dp).clip(com.medk.app.ui.theme.MedkShapes.Hex).background(Color.Black.copy(.55f))
+                    Box(Modifier.align(Alignment.TopEnd).padding(10.dp).size(32.dp).clip(com.medk.app.ui.theme.MedkShapes.Emblem).background(Color.Black.copy(.55f))
                         .clickable { scope.launch { try { c.catalog.toggleFavorite(product.id) } catch (e: Exception) { toast(e.friendly()) } } },
                         contentAlignment = Alignment.Center) {
                         val fav = product.id in favs

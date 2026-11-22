@@ -283,7 +283,7 @@ fun SectionScreen(id: String, nav: NavHostController) {
                             .background(Brush.horizontalGradient(listOf(p.start.copy(.35f), Color.Transparent)))
                             .border(1.dp, p.accent.copy(.5f), MedkShapes.Chamfer).padding(10.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(48.dp).clip(MedkShapes.Hex)) {
+                            Box(Modifier.size(48.dp).clip(MedkShapes.Emblem)) {
                                 NetImage(section.imageUrl, Modifier.fillMaxSize(), palette = p, placeholderIcon = categoryIcon(cat?.iconKey))
                             }
                             Spacer(Modifier.width(12.dp))

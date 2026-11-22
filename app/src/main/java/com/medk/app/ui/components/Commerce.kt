@@ -78,8 +78,8 @@ fun NetImage(url: String?, modifier: Modifier = Modifier, contentScale: ContentS
                 ?: Brush.linearGradient(listOf(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.surfaceContainerHighest)))
             .blueprintGrid(Color.White, 14f, .07f),
             contentAlignment = Alignment.Center) {
-            Box(Modifier.size(42.dp).clip(MedkShapes.Hex).background(Color.White.copy(.18f)))
-            Box(Modifier.size(38.dp).clip(MedkShapes.Hex).background(Color.Black.copy(.35f)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(42.dp).clip(MedkShapes.Emblem).background(Color.White.copy(.18f)))
+            Box(Modifier.size(38.dp).clip(MedkShapes.Emblem).background(Color.Black.copy(.35f)), contentAlignment = Alignment.Center) {
                 Icon(placeholderIcon, null, tint = Color.White.copy(alpha = .85f), modifier = Modifier.size(18.dp))
             }
         }
@@ -89,13 +89,13 @@ fun NetImage(url: String?, modifier: Modifier = Modifier, contentScale: ContentS
         loading = { Shimmer(Modifier.fillMaxSize()) }, error = { fallback() })
 }
 
-/** Hexagon emblem for a category: outer ring + gradient core + icon. */
+/** Chamfered emblem for a category: outer ring + gradient core + icon. */
 @Composable
 fun CategoryArt(key: String?, palette: CategoryPalette, size: Dp = 46.dp) {
     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-        Box(Modifier.fillMaxSize().clip(MedkShapes.Hex).background(palette.accent.copy(alpha = .45f)))
-        Box(Modifier.fillMaxSize(.9f).clip(MedkShapes.Hex).background(MaterialTheme.colorScheme.background))
-        Box(Modifier.fillMaxSize(.74f).clip(MedkShapes.Hex).background(palette.brush), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().clip(MedkShapes.Emblem).background(palette.accent.copy(alpha = .45f)))
+        Box(Modifier.fillMaxSize(.9f).clip(MedkShapes.Emblem).background(MaterialTheme.colorScheme.background))
+        Box(Modifier.fillMaxSize(.74f).clip(MedkShapes.Emblem).background(palette.brush), contentAlignment = Alignment.Center) {
             Icon(categoryIcon(key), null, tint = Color.White, modifier = Modifier.size(size * .32f))
         }
     }
@@ -146,7 +146,7 @@ fun ProductCard(
                 Modifier.align(Alignment.TopStart).padding(6.dp).background(Color.Black.copy(.6f), MedkShapes.ChamferXs))
             else if (product.stock != null && product.stock <= 5) Pill("آخر ${product.stock}", MedkColors.Warning,
                 Modifier.align(Alignment.TopStart).padding(6.dp).background(Color.Black.copy(.6f), MedkShapes.ChamferXs))
-            if (onFavorite != null) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(26.dp).clip(MedkShapes.Hex)
+            if (onFavorite != null) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(26.dp).clip(MedkShapes.Emblem)
                 .background(Color.Black.copy(alpha = .55f)).clickable(onClick = onFavorite), contentAlignment = Alignment.Center) {
                 Icon(if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "المفضلة",
                     tint = if (isFavorite) MedkColors.Violet else Color.White, modifier = Modifier.size(13.dp))
@@ -177,7 +177,7 @@ fun statusColor(s: OrderStatus): Color = when (s) {
 @Composable
 fun StatusChip(status: OrderStatus, modifier: Modifier = Modifier) = Pill(status.label, statusColor(status), modifier)
 
-/** Horizontal progress stepper with hexagon nodes: open → paid → delivered → closed. */
+/** Horizontal progress stepper with chamfered nodes: open → paid → delivered → closed. */
 @Composable
 fun OrderProgress(status: OrderStatus, modifier: Modifier = Modifier) {
     val steps = OrderStatus.entries
@@ -189,7 +189,7 @@ fun OrderProgress(status: OrderStatus, modifier: Modifier = Modifier) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f).height(2.dp).background(
                         if (i == 0) Color.Transparent else if (done) MedkColors.Violet else MaterialTheme.colorScheme.outline))
-                    Box(Modifier.size(24.dp).clip(MedkShapes.Hex).background(
+                    Box(Modifier.size(24.dp).clip(MedkShapes.Emblem).background(
                         if (done) MedkColors.PrimaryGradient else androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.surfaceContainerHighest)),
                         contentAlignment = Alignment.Center) {
                         if (done) Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(12.dp))
@@ -209,7 +209,7 @@ fun OrderProgress(status: OrderStatus, modifier: Modifier = Modifier) {
 
 @Composable
 fun Avatar(name: String?, url: String?, size: Dp = 40.dp, modifier: Modifier = Modifier) {
-    Box(modifier.size(size).clip(MedkShapes.Hex).background(MedkColors.PrimaryGradient), contentAlignment = Alignment.Center) {
+    Box(modifier.size(size).clip(MedkShapes.Emblem).background(MedkColors.PrimaryGradient), contentAlignment = Alignment.Center) {
         Text((name?.trim()?.firstOrNull() ?: 'M').uppercase(), color = Color.White, style = MaterialTheme.typography.titleSmall)
         if (!url.isNullOrBlank()) SubcomposeAsyncImage(url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
     }

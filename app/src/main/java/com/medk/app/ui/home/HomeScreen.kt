@@ -71,7 +71,7 @@ import com.medk.app.ui.navigation.Routes
 import com.medk.app.ui.navigation.toTab
 import com.medk.app.ui.theme.MedkColors
 import com.medk.app.ui.theme.blueprintGrid
-import com.medk.app.ui.components.HexIcon
+import com.medk.app.ui.components.EmblemIcon
 import androidx.compose.ui.unit.sp
 import com.medk.app.ui.theme.categoryPalette
 import kotlinx.coroutines.async
@@ -192,11 +192,11 @@ private fun WelcomeBanner(onBrowse: () -> Unit) {
         .border(1.dp, Brush.horizontalGradient(listOf(MedkColors.Violet.copy(.8f), MedkColors.Purple.copy(.15f))), shape)) {
         // geometric emblem (start side in RTL = right)
         Box(Modifier.align(Alignment.CenterStart).padding(start = 14.dp).size(104.dp), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(104.dp).clip(MedkShapes.Hex).background(MedkColors.Violet.copy(.18f)))
-            Box(Modifier.size(96.dp).clip(MedkShapes.Hex).background(Color(0xFF120B22)))
+            Box(Modifier.size(104.dp).clip(MedkShapes.Emblem).background(MedkColors.Violet.copy(.18f)))
+            Box(Modifier.size(96.dp).clip(MedkShapes.Emblem).background(Color(0xFF120B22)))
             MedkMark(62.dp)
             listOf("gaming" to (-44 to -34), "p2p" to (46 to -30), "subscriptions" to (44 to 34), "other" to (-44 to 32)).forEach { (k, o) ->
-                Box(Modifier.offset(o.first.dp, o.second.dp)) { HexIcon(categoryIcon(k), categoryPalette(k).brush, 22.dp) }
+                Box(Modifier.offset(o.first.dp, o.second.dp)) { EmblemIcon(categoryIcon(k), categoryPalette(k).brush, 22.dp) }
             }
         }
         Column(Modifier.align(Alignment.CenterEnd).padding(end = 16.dp).fillMaxWidth(.56f)) {

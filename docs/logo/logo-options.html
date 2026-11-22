@@ -1,0 +1,61 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:C;src:url(c800.woff2);font-weight:800}
+@font-face{font-family:A;src:url(ar700.woff2);font-weight:700}
+body{margin:0;background:#f2f0f6;font-family:C}
+.grid{display:grid;grid-template-columns:repeat(3,420px);gap:28px;padding:32px}
+.card{background:#fff;border-radius:18px;padding:18px;box-shadow:0 2px 10px #0001}
+.tile{width:384px;height:384px;border-radius:84px;background:#080808;overflow:hidden}
+.lbl{display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-family:A;font-size:22px;color:#222;direction:rtl}
+.n{font-family:C;background:#762BDE;color:#fff;border-radius:8px;padding:2px 12px;font-size:22px}
+svg text{font-family:C;font-weight:800;font-style:italic}
+</style></head><body><div class="grid">
+
+<!-- 1 Wordmark + chamfer underline -->
+<div class="card"><div class="tile"><svg viewBox="0 0 384 384" width="384" height="384">
+<defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#A64BFF"/><stop offset="1" stop-color="#762BDE"/></linearGradient></defs>
+<text x="192" y="205" font-size="92" fill="#fff" text-anchor="middle" letter-spacing="-2">MED<tspan fill="url(#g)">-K</tspan></text>
+<path d="M70 232 H300 L314 246 H84 Z" fill="url(#g)"/>
+</svg></div><div class="lbl"><span>كلمة الشعار + خط سفلي مشطوف</span><span class="n">1</span></div></div>
+
+<!-- 2 MK monogram in chamfered square -->
+<div class="card"><div class="tile"><svg viewBox="0 0 384 384" width="384" height="384">
+<defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A64BFF"/><stop offset="1" stop-color="#762BDE"/></linearGradient></defs>
+<path d="M132 82 H302 V252 L252 302 H82 V132 Z" fill="none" stroke="url(#g2)" stroke-width="14"/>
+<text x="186" y="228" font-size="104" fill="#fff" text-anchor="middle" letter-spacing="-4">M<tspan fill="#A64BFF">K</tspan></text>
+</svg></div><div class="lbl"><span>حرفا MK داخل مربع مشطوف</span><span class="n">2</span></div></div>
+
+<!-- 3 Speed M from slanted bars -->
+<div class="card"><div class="tile"><svg viewBox="0 0 384 384" width="384" height="384">
+<defs><linearGradient id="g3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C08BFF"/><stop offset="1" stop-color="#762BDE"/></linearGradient></defs>
+<g transform="translate(206 166) skewX(-14)">
+<path d="M-112 70 V-70 H-76 L0 18 L76 -70 H112 V70 H78 V-18 L12 56 H-12 L-78 -18 V70 Z" fill="url(#g3)"/>
+</g>
+<text x="192" y="302" font-size="40" fill="#fff" text-anchor="middle" letter-spacing="6">MED-<tspan fill="#A64BFF">K</tspan></text>
+</svg></div><div class="lbl"><span>حرف M انسيابي + الاسم</span><span class="n">3</span></div></div>
+
+<!-- 4 Parallelogram frame -->
+<div class="card"><div class="tile"><svg viewBox="0 0 384 384" width="384" height="384">
+<defs><linearGradient id="g4" x1="0" x2="1"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#fff"/><stop offset=".5" stop-color="#A64BFF"/><stop offset="1" stop-color="#762BDE"/></linearGradient></defs>
+<path d="M78 138 H338 L306 246 H46 Z" fill="none" stroke="url(#g4)" stroke-width="10"/>
+<text x="190" y="217" font-size="62" fill="#fff" text-anchor="middle" letter-spacing="-1">MED<tspan fill="#A64BFF">-K</tspan></text>
+</svg></div><div class="lbl"><span>إطار مائل (متوازي أضلاع)</span><span class="n">4</span></div></div>
+
+<!-- 5 Orbit ring -->
+<div class="card"><div class="tile"><svg viewBox="0 0 384 384" width="384" height="384">
+<defs><linearGradient id="g5" x1="0" x2="1"><stop offset="0" stop-color="#A64BFF"/><stop offset="1" stop-color="#762BDE"/></linearGradient></defs>
+<path d="M78 150 A124 124 0 0 1 306 150" fill="none" stroke="url(#g5)" stroke-width="12" stroke-linecap="round"/>
+<path d="M306 234 A124 124 0 0 1 78 234" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+<circle cx="306" cy="150" r="10" fill="#A64BFF"/>
+<text x="190" y="216" font-size="70" fill="#fff" text-anchor="middle" letter-spacing="-2">MED<tspan fill="#A64BFF">-K</tspan></text>
+</svg></div><div class="lbl"><span>مدار دائري مفتوح</span><span class="n">5</span></div></div>
+
+<!-- 6 Digital bag -->
+<div class="card"><div class="tile"><svg viewBox="0 0 384 384" width="384" height="384">
+<defs><linearGradient id="g6" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A64BFF"/><stop offset="1" stop-color="#762BDE"/></linearGradient></defs>
+<path d="M152 112 V96 a40 40 0 0 1 80 0 V112" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+<path d="M104 112 H280 L298 262 Q300 280 282 280 H102 Q84 280 86 262 Z" fill="url(#g6)"/>
+<text x="192" y="236" font-size="104" fill="#fff" text-anchor="middle">M</text>
+<text x="192" y="334" font-size="38" fill="#fff" text-anchor="middle" letter-spacing="5">MED-<tspan fill="#A64BFF">K</tspan></text>
+</svg></div><div class="lbl"><span>حقيبة تسوق رقمية</span><span class="n">6</span></div></div>
+
+</div></body></html>

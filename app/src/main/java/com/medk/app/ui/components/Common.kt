@@ -94,21 +94,25 @@ fun MedkWordmark(fontSize: TextUnit = 22.sp, subtitle: Boolean = false, modifier
     }
 }
 
-/** Hexagon "M" mark — same geometry as the launcher icon. */
+/** MK monogram inside a chamfered square — same design as the launcher icon. */
 @Composable
 fun MedkMark(size: Dp = 64.dp, modifier: Modifier = Modifier) {
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
-        Box(Modifier.fillMaxSize().clip(MedkShapes.Hex).background(Brush.linearGradient(listOf(MedkColors.Violet, MedkColors.Purple))))
-        Box(Modifier.fillMaxSize(.84f).clip(MedkShapes.Hex).background(MaterialTheme.colorScheme.background))
-        Text("M", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = (size.value * 0.36f).sp,
-            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+        Box(Modifier.fillMaxSize().clip(MedkShapes.Emblem).background(Brush.linearGradient(listOf(MedkColors.Violet, MedkColors.Purple))))
+        Box(Modifier.fillMaxSize(.86f).clip(MedkShapes.Emblem).background(MaterialTheme.colorScheme.background))
+        Text(
+            buildAnnotatedString { append("M"); withStyle(SpanStyle(color = MedkColors.Violet)) { append("K") } },
+            color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = (size.value * 0.34f).sp,
+            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, letterSpacing = (-1).sp,
+            style = MaterialTheme.typography.titleLarge.copy(lineHeight = (size.value * 0.4f).sp),
+        )
     }
 }
 
-/** Small hexagon badge holding an icon. */
+/** Small chamfered badge holding an icon. */
 @Composable
-fun HexIcon(icon: ImageVector, brush: Brush, size: Dp = 36.dp, iconTint: Color = Color.White, modifier: Modifier = Modifier) {
-    Box(modifier.size(size).clip(MedkShapes.Hex).background(brush), contentAlignment = Alignment.Center) {
+fun EmblemIcon(icon: ImageVector, brush: Brush, size: Dp = 36.dp, iconTint: Color = Color.White, modifier: Modifier = Modifier) {
+    Box(modifier.size(size).clip(MedkShapes.Emblem).background(brush), contentAlignment = Alignment.Center) {
         Icon(icon, null, tint = iconTint, modifier = Modifier.size(size * .48f))
     }
 }
@@ -234,7 +238,7 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier, action: String? 
                 modifier = Modifier.border(1.dp, MedkColors.Violet.copy(.5f), MedkShapes.ChamferXs).padding(horizontal = 5.dp, vertical = 1.dp))
             Spacer(Modifier.width(8.dp))
         } else {
-            Box(Modifier.size(8.dp).clip(MedkShapes.Hex).background(MedkColors.Violet))
+            Box(Modifier.size(8.dp).clip(MedkShapes.Emblem).background(MedkColors.Violet))
             Spacer(Modifier.width(8.dp))
         }
         Text(title, style = MaterialTheme.typography.titleMedium)
@@ -271,8 +275,8 @@ private fun StateMessage(icon: ImageVector, title: String, subtitle: String?, ac
     Column(modifier.fillMaxWidth().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center) {
         Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) {
-            Box(Modifier.fillMaxSize().clip(MedkShapes.Hex).background(tint.copy(alpha = .35f)))
-            Box(Modifier.fillMaxSize(.9f).clip(MedkShapes.Hex).background(MaterialTheme.colorScheme.background))
+            Box(Modifier.fillMaxSize().clip(MedkShapes.Emblem).background(tint.copy(alpha = .35f)))
+            Box(Modifier.fillMaxSize(.9f).clip(MedkShapes.Emblem).background(MaterialTheme.colorScheme.background))
             Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.height(12.dp))

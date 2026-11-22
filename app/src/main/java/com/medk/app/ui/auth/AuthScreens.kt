@@ -135,7 +135,7 @@ fun SplashScreen() {
         Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 72.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             repeat(3) { i ->
                 val a by t.animateFloat(.25f, 1f, infiniteRepeatable(tween(600, delayMillis = i * 180), RepeatMode.Reverse), label = "d$i")
-                Box(Modifier.size(9.dp).alpha(a).clip(com.medk.app.ui.theme.MedkShapes.Hex).background(MedkColors.Violet))
+                Box(Modifier.size(9.dp).alpha(a).clip(com.medk.app.ui.theme.MedkShapes.Emblem).background(MedkColors.Violet))
             }
         }
     }
@@ -152,14 +152,14 @@ fun WelcomeScreen(onLogin: () -> Unit, onRegister: () -> Unit, vm: AuthViewModel
         Spacer(Modifier.height(8.dp))
         MedkWordmark(22.sp)
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(200.dp).clip(com.medk.app.ui.theme.MedkShapes.Hex).background(MedkColors.Purple.copy(.10f)))
-            Box(Modifier.size(196.dp).clip(com.medk.app.ui.theme.MedkShapes.Hex).background(MaterialTheme.colorScheme.background))
-            Box(Modifier.size(150.dp).clip(com.medk.app.ui.theme.MedkShapes.Hex).background(MedkColors.Purple.copy(.08f)))
+            Box(Modifier.size(200.dp).clip(com.medk.app.ui.theme.MedkShapes.Emblem).background(MedkColors.Purple.copy(.10f)))
+            Box(Modifier.size(196.dp).clip(com.medk.app.ui.theme.MedkShapes.Emblem).background(MaterialTheme.colorScheme.background))
+            Box(Modifier.size(150.dp).clip(com.medk.app.ui.theme.MedkShapes.Emblem).background(MedkColors.Purple.copy(.08f)))
             MedkMark(92.dp, Modifier.offset(y = y.dp))
             listOf("gaming" to (0 to -100), "subscriptions" to (87 to -50), "accounts" to (87 to 50),
                 "p2p" to (0 to 100), "other" to (-87 to 50)).forEach { (key, pos) ->
                 Box(Modifier.offset(pos.first.dp, (pos.second - y / 2).dp)) {
-                    com.medk.app.ui.components.HexIcon(categoryIcon(key), categoryPalette(key).brush, 38.dp)
+                    com.medk.app.ui.components.EmblemIcon(categoryIcon(key), categoryPalette(key).brush, 38.dp)
                 }
             }
         }

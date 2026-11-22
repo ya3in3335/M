@@ -312,7 +312,7 @@ fun ChatScreen(id: String, nav: NavHostController) {
                     focusedBorderColor = MedkColors.Violet, unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer))
             Spacer(Modifier.width(6.dp))
-            Box(Modifier.size(44.dp).clip(MedkShapes.Hex).background(MedkColors.PrimaryGradient)
+            Box(Modifier.size(44.dp).clip(MedkShapes.Emblem).background(MedkColors.PrimaryGradient)
                 .clickable(enabled = text.isNotBlank() && !sending) { vm.send(text) { text = "" } }, contentAlignment = Alignment.Center) {
                 Icon(Icons.AutoMirrored.Filled.Send, "إرسال", tint = Color.White, modifier = Modifier.size(18.dp))
             }

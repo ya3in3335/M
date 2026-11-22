@@ -162,7 +162,7 @@ private fun AssetRow(a: P2pAsset, buy: Boolean, selected: Boolean, onClick: () -
     Row(Modifier.fillMaxWidth().clip(shape).background(MaterialTheme.colorScheme.surfaceContainer)
         .border(if (selected) 2.dp else 1.dp, if (selected) MedkColors.Success else MaterialTheme.colorScheme.outlineVariant, shape)
         .clickable(onClick = onClick).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(38.dp).clip(com.medk.app.ui.theme.MedkShapes.Hex).background(categoryPalette("p2p").brush), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(38.dp).clip(com.medk.app.ui.theme.MedkShapes.Emblem).background(categoryPalette("p2p").brush), contentAlignment = Alignment.Center) {
             Text(a.code.take(4), color = Color.White, style = MaterialTheme.typography.labelSmall)
         }
         Spacer(Modifier.width(12.dp))

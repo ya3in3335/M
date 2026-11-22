@@ -124,7 +124,7 @@ fun WorkspaceScreen(nav: NavHostController, onMenu: () -> Unit) {
                                 Text(usd(s.revenueUsd), color = Color.White, style = MaterialTheme.typography.headlineMedium)
                                 Text(dzd(s.revenueDzd), color = Color.White.copy(.8f), style = MaterialTheme.typography.labelMedium)
                             }
-                            Box(Modifier.size(46.dp).clip(MedkShapes.Hex).background(Color.White.copy(.18f)), contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(46.dp).clip(MedkShapes.Emblem).background(Color.White.copy(.18f)), contentAlignment = Alignment.Center) {
                                 Icon(Icons.Filled.Paid, null, tint = Color.White, modifier = Modifier.size(22.dp))
                             }
                         }
@@ -164,7 +164,7 @@ private fun StatCard(label: String, value: String, icon: ImageVector, color: Col
     Row(Modifier.fillMaxWidth().clip(MedkShapes.ChamferSm).background(MaterialTheme.colorScheme.surfaceContainer)
         .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MedkShapes.ChamferSm).clickable(onClick = onClick)
         .padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(30.dp).clip(MedkShapes.Hex).background(color.copy(.16f)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(30.dp).clip(MedkShapes.Emblem).background(color.copy(.16f)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = color, modifier = Modifier.size(15.dp))
         }
         Spacer(Modifier.width(9.dp))
