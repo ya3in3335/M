@@ -16,7 +16,7 @@ if (hasGoogleServices) {
     logger.warn("MED-K: app/google-services.json is missing — Firebase will show a configuration screen at runtime.")
 }
 
-// Public client configuration (anon key is designed to be public; NEVER put service_role here).
+// Public client configuration only. No server secret ever ships in the app.
 val secrets = Properties().apply {
     val f = rootProject.file("secrets.properties")
     if (f.exists()) f.inputStream().use { load(it) }
@@ -35,8 +35,7 @@ android {
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
         versionName = System.getenv("VERSION_NAME") ?: "1.0.0"
 
-        buildConfigField("String", "SUPABASE_URL", "\"${cfg("SUPABASE_URL")}\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${cfg("SUPABASE_ANON_KEY")}\"")
+        buildConfigField("String", "FUNCTIONS_REGION", "\"${cfg("FUNCTIONS_REGION").ifEmpty { "europe-west1" }}\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${cfg("GOOGLE_WEB_CLIENT_ID")}\"")
         buildConfigField("Boolean", "HAS_GOOGLE_SERVICES", hasGoogleServices.toString())
         resourceConfigurations += listOf("ar", "en")
@@ -45,7 +44,7 @@ android {
 
     // Two apps from one codebase:
     //   app  : store = customer/staff marketplace, admin = owner control panel ("MED-K Admin")
-    //   mode : prod  = real Firebase + Supabase,  demo = no backend, in-memory sample data
+    //   mode : prod  = real Firebase backend,  demo = no backend, in-memory sample data
     flavorDimensions += listOf("app", "mode")
     productFlavors {
         create("store") { dimension = "app"; buildConfigField("Boolean", "ADMIN_APP", "false") }
@@ -161,11 +160,11 @@ dependencies {
     implementation(libs.androidx.credentials.play)
     implementation(libs.googleid)
 
-    implementation(platform(libs.supabase.bom))
-    implementation(libs.supabase.postgrest)
-    implementation(libs.supabase.realtime)
-    implementation(libs.supabase.storage)
-    implementation(libs.ktor.client.okhttp)
+    implementation(libs.firebase.firestore)
+    implementation(libs.firebase.storage)
+    implementation(libs.firebase.functions)
+    implementation(libs.firebase.appcheck.playintegrity)
+    debugImplementation(libs.firebase.appcheck.debug)
 
     implementation(libs.coil.compose)
     implementation(libs.coil.network)

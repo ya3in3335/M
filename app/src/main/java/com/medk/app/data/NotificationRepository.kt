@@ -12,21 +12,15 @@ import com.medk.app.MainActivity
 import com.medk.app.MedkApp
 import com.medk.app.R
 import com.medk.app.core.AppContainer
-import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.query.Order
-import io.github.jan.supabase.realtime.PostgresAction
-import io.github.jan.supabase.realtime.RealtimeChannel
-import io.github.jan.supabase.realtime.channel
-import io.github.jan.supabase.realtime.decodeRecord
-import io.github.jan.supabase.realtime.postgresChangeFlow
-import io.github.jan.supabase.realtime.realtime
-import io.github.jan.supabase.postgrest.query.filter.FilterOperator
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import com.google.firebase.firestore.DocumentChange
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
 
 /** In-app notifications table + realtime → optional Android system notifications. */
 open class NotificationRepository(private val c: AppContainer) {
@@ -36,55 +30,48 @@ open class NotificationRepository(private val c: AppContainer) {
     /** Conversation the user is currently viewing (no system notification for it). */
     var activeConversationId: String? = null
 
-    private var channel: RealtimeChannel? = null
-    private var job: Job? = null
+
+    private fun col(uid: String) = c.firestore.collection("users").document(uid).collection("notifications")
+    private var registration: ListenerRegistration? = null
 
     open suspend fun list(): List<AppNotification> {
         val uid = c.auth.currentUid ?: return emptyList()
-        val l = c.supabase.from("notifications").select {
-            filter { eq("user_id", uid) }; order("created_at", Order.DESCENDING); limit(100)
-        }.decodeList<AppNotification>()
+        val l = col(uid).orderBy("createdAt", Query.Direction.DESCENDING).limit(100).get().await().documents.map { it.toNotification(uid) }
         _unread.value = l.count { !it.isRead }
         return l
     }
 
     open suspend fun markAllRead() {
         val uid = c.auth.currentUid ?: return
-        c.supabase.from("notifications").update({ set("is_read", true) }) { filter { eq("user_id", uid); eq("is_read", false) } }
+        val unread = col(uid).whereEqualTo("read", false).limit(400).get().await()
+        if (!unread.isEmpty) c.firestore.batch().apply { unread.documents.forEach { update(it.reference, "read", true) } }.commit().await()
         _unread.value = 0
     }
 
     open suspend fun markRead(id: String) {
-        c.supabase.from("notifications").update({ set("is_read", true) }) { filter { eq("id", id) } }
+        val uid = c.auth.currentUid ?: return
+        col(uid).document(id).update("read", true).await()
         _unread.value = (_unread.value - 1).coerceAtLeast(0)
     }
 
+    /** Listens for new notifications while the app is running and shows them as system notifications. */
     open fun start(uid: String) {
         stop()
-        job = c.appScope.launch {
-            runCatching { list() }
-            val ch = c.supabase.channel("notif-$uid")
-            channel = ch
-            val flow = ch.postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
-                table = "notifications"
-                filter("user_id", FilterOperator.EQ, uid)
+        var first = true
+        registration = col(uid).orderBy("createdAt", Query.Direction.DESCENDING).limit(30).addSnapshotListener { snap, err ->
+            if (err != null || snap == null) return@addSnapshotListener
+            _unread.value = snap.documents.count { it.getBoolean("read") == false }
+            if (first) { first = false; return@addSnapshotListener }
+            snap.documentChanges.filter { it.type == DocumentChange.Type.ADDED && !it.document.metadata.hasPendingWrites() }.forEach { ch ->
+                val n = ch.document.toNotification(uid)
+                if (n.conversationId != null && n.conversationId == activeConversationId) return@forEach
+                c.appScope.launch { if (c.settings.notificationsEnabled.first()) show(n) }
             }
-            launch {
-                flow.collect { action ->
-                    val n = runCatching { action.decodeRecord<AppNotification>() }.getOrNull() ?: return@collect
-                    _unread.value += 1
-                    if (n.conversationId != null && n.conversationId == activeConversationId) return@collect
-                    if (c.settings.notificationsEnabled.first()) show(n)
-                }
-            }
-            runCatching { ch.subscribe() }
         }
     }
 
     open fun stop() {
-        job?.cancel(); job = null
-        val ch = channel; channel = null
-        if (ch != null) c.appScope.launch { runCatching { c.supabase.realtime.removeChannel(ch) } }
+        registration?.remove(); registration = null
         _unread.value = 0
     }
 

@@ -368,8 +368,7 @@ fun NotConfiguredScreen() {
         EmptyBox(Icons.Filled.Lock, "التطبيق غير مُهيأ",
             buildString {
                 append("هذه النسخة بُنيت بدون إعدادات الخادم.\n")
-                if (!c.firebaseConfigured) append("• ملف google-services.json (Firebase) مفقود.\n")
-                if (!c.backendConfigured) append("• SUPABASE_URL / SUPABASE_ANON_KEY غير مضبوطة.\n")
+                append("• ملف google-services.json (Firebase) مفقود أو لا يحتوي على معرّف هذا التطبيق.\n")
                 append("راجع ملف README لإعداد GitHub Secrets.")
             })
     }

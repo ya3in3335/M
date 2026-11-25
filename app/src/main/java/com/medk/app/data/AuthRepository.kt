@@ -15,16 +15,11 @@ import com.google.firebase.auth.userProfileChangeRequest
 import com.medk.app.BuildConfig
 import com.medk.app.core.AppContainer
 import com.medk.app.core.friendly
-import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.put
 
 sealed interface AuthState {
     data object Loading : AuthState
@@ -55,19 +50,18 @@ open class AuthRepository(private val c: AppContainer) {
     open suspend fun restore() {
         _state.value = AuthState.Loading
         _state.value = runCatching { AuthState.SignedIn(bootstrap(null)) }.getOrElse { e ->
-            if (e.message?.contains("account_disabled") == true || e.message?.contains("invalid token") == true) {
+            if (e.message?.contains("account_disabled") == true || e.message?.contains("unauthenticated", true) == true) {
                 c.firebaseAuth?.signOut(); AuthState.SignedOut
             } else AuthState.Failed(e.friendly())
         }
     }
 
-    /** Verifies the Firebase token server-side, ensures the Supabase claim and returns the profile. */
+    /** Server-side bootstrap (Cloud Function): creates the profile and syncs the role claim. */
     private suspend fun bootstrap(fullName: String?): Profile {
-        val res = c.edge.call("auth-bootstrap", buildJsonObject { if (fullName != null) put("full_name", fullName) })
-        if (res["claims_updated"]?.toString() == "true") {
-            c.firebaseAuth?.currentUser?.getIdToken(true)?.await()
-        }
-        val p = c.json.decodeFromJsonElement<Profile>(res["profile"]!!.jsonObject)
+        val res = c.cloud.call("bootstrap", if (fullName != null) mapOf("full_name" to fullName) else emptyMap())
+        if (res["claims_updated"] == true) c.firebaseAuth?.currentUser?.getIdToken(true)?.await()
+        @Suppress("UNCHECKED_CAST")
+        val p = profileFromFunction(res["profile"] as Map<String, Any?>)
         c.notifications.start(p.id)
         return p
     }
@@ -133,14 +127,15 @@ open class AuthRepository(private val c: AppContainer) {
 
     open suspend fun refreshProfile() {
         val uid = currentUid ?: return
-        val p = c.supabase.from("profiles").select { filter { eq("id", uid) } }.decodeSingle<Profile>()
+        val p = c.firestore.collection("users").document(uid).get().await().toProfile()
         _state.value = AuthState.SignedIn(p)
     }
 
     open suspend fun updateName(name: String) {
         val uid = currentUid ?: return
         c.firebaseAuth?.currentUser?.updateProfile(userProfileChangeRequest { displayName = name })?.await()
-        c.supabase.from("profiles").update({ set("full_name", name) }) { filter { eq("id", uid) } }
+        c.firestore.collection("users").document(uid)
+            .update(mapOf("fullName" to name, "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp())).await()
         refreshProfile()
     }
 

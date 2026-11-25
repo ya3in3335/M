@@ -1,0 +1,171 @@
+rules_version = '2';
+
+// =====================================================================
+// MED-K — Firestore security rules (deny by default).
+// * Roles come from Firebase Auth custom claims set ONLY by Cloud Functions.
+// * Every privileged action (checkout, prices, order status, staff, roles)
+//   goes through Cloud Functions; clients cannot write orders/conversations.
+// * Suspended accounts (users/{uid}.active == false) lose all access.
+// =====================================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------ helpers
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function userPath(id) { return /databases/$(database)/documents/users/$(id); }
+    function me() { return get(userPath(uid())).data; }
+    function active() { return signedIn() && exists(userPath(uid())) && me().active == true; }
+    function claimRole() { return request.auth.token.get('role', 'customer'); }
+    function isOwner() { return active() && claimRole() == 'owner' && me().role == 'owner'; }
+    function isStaff() { return active() && claimRole() == 'staff' && me().role == 'staff'; }
+    function isTeam() { return isOwner() || isStaff(); }
+    function perm(p) { return isOwner() || (isStaff() && me().get('perms', {}).get(p, false) == true); }
+    function hasSection(s) { return isOwner() || (isStaff() && s != null && s in me().get('sections', [])); }
+
+    function str(v, max) { return v is string && v.size() > 0 && v.size() <= max; }
+    function optStr(v, max) { return v == null || (v is string && v.size() <= max); }
+    function money(v) { return (v is int || v is float) && v >= 0 && v <= 100000000; }
+    function optMoney(v) { return v == null || money(v); }
+    function url(v) { return v == null || (v is string && v.size() <= 1000 && v.matches('https://.*')); }
+    function d() { return request.resource.data; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    function conv(cid) { return get(/databases/$(database)/documents/conversations/$(cid)).data; }
+    function canAccess(c) {
+      return active() && (c.customerId == uid() || (isStaff() && c.staffId == uid()) || isOwner());
+    }
+
+    // ------------------------------------------------------------- users
+    match /users/{userId} {
+      allow get: if active() && (userId == uid() || isOwner());
+      allow list: if isOwner();
+      // A user may only edit their own display fields. Role, active, perms,
+      // sections and email are managed exclusively by Cloud Functions.
+      allow update: if active() && userId == uid()
+        && changed().hasOnly(['fullName', 'avatarUrl', 'updatedAt'])
+        && str(d().fullName, 80) && url(d().get('avatarUrl', null));
+      allow create, delete: if false;
+
+      match /favorites/{productId} {
+        allow read, delete: if active() && userId == uid();
+        allow create: if active() && userId == uid()
+          && d().keys().hasOnly(['createdAt']) && d().createdAt == request.time;
+        allow update: if false;
+      }
+      match /notifications/{nid} {
+        allow read, delete: if signedIn() && userId == uid();
+        allow update: if signedIn() && userId == uid()
+          && changed().hasOnly(['read']) && d().read is bool;
+        allow create: if false;
+      }
+    }
+
+    // Public seller/customer card (name + avatar + role), maintained by Functions.
+    match /publicProfiles/{userId} {
+      allow read: if active();
+      allow write: if false;
+    }
+
+    // ----------------------------------------------------------- catalog
+    match /categories/{id} {
+      allow read: if true;
+      // The five main categories are fixed (each has a dedicated screen).
+      allow update: if isOwner()
+        && changed().hasOnly(['name', 'description', 'sortOrder', 'active'])
+        && str(d().name, 80) && optStr(d().get('description', null), 300)
+        && d().sortOrder is int && d().active is bool;
+      allow create, delete: if false;
+    }
+
+    function validSection(x) {
+      return x.keys().hasOnly(['categoryId', 'name', 'description', 'imageUrl', 'assignedStaffId', 'sortOrder', 'active', 'createdAt'])
+        && str(x.categoryId, 40) && exists(/databases/$(database)/documents/categories/$(x.categoryId))
+        && str(x.name, 80) && optStr(x.get('description', null), 300) && url(x.get('imageUrl', null))
+        && (x.get('assignedStaffId', null) == null || exists(userPath(x.assignedStaffId)))
+        && x.sortOrder is int && x.active is bool;
+    }
+    match /sections/{id} {
+      allow read: if true;
+      allow create, update: if isOwner() && validSection(d());
+      allow delete: if isOwner();
+    }
+
+    function validProduct(x) {
+      return x.keys().hasOnly(['categoryId', 'sectionId', 'name', 'description', 'priceUsd', 'priceDzd', 'stock',
+                               'available', 'images', 'createdAt', 'updatedAt'])
+        && str(x.categoryId, 40) && exists(/databases/$(database)/documents/categories/$(x.categoryId))
+        && (x.get('sectionId', null) == null || exists(/databases/$(database)/documents/sections/$(x.sectionId)))
+        && str(x.name, 120) && optStr(x.get('description', null), 2000)
+        && money(x.priceUsd) && money(x.priceDzd)
+        && (x.get('stock', null) == null || (x.stock is int && x.stock >= 0 && x.stock <= 1000000))
+        && x.available is bool
+        && x.images is list && x.images.size() <= 8
+        && x.updatedAt == request.time;
+    }
+    match /products/{id} {
+      allow get: if resource.data.available == true || isTeam();
+      allow list: if resource.data.available == true || isTeam();
+      allow create: if perm('manageProducts') && hasSection(d().get('sectionId', null))
+        && validProduct(d()) && d().createdAt == request.time;
+      allow update: if perm('manageProducts') && hasSection(resource.data.get('sectionId', null))
+        && hasSection(d().get('sectionId', null)) && validProduct(d()) && d().createdAt == resource.data.createdAt;
+      allow delete: if perm('manageProducts') && hasSection(resource.data.get('sectionId', null));
+    }
+
+    match /banners/{id} {
+      allow read: if true;
+      allow create, update: if isOwner()
+        && d().keys().hasOnly(['title', 'subtitle', 'imageUrl', 'categorySlug', 'sortOrder', 'active'])
+        && str(d().title, 80) && optStr(d().get('subtitle', null), 160) && url(d().get('imageUrl', null))
+        && optStr(d().get('categorySlug', null), 40) && d().sortOrder is int && d().active is bool;
+      allow delete: if isOwner();
+    }
+
+    match /p2pAssets/{id} {
+      allow read: if true;
+      allow create, update: if perm('manageP2p')
+        && d().keys().hasOnly(['code', 'name', 'network', 'buyPriceDzd', 'sellPriceDzd', 'minAmount', 'maxAmount', 'active', 'sortOrder', 'updatedAt'])
+        && str(d().code, 12) && str(d().name, 60) && optStr(d().get('network', null), 30)
+        && money(d().buyPriceDzd) && money(d().sellPriceDzd)
+        && optMoney(d().get('minAmount', null)) && optMoney(d().get('maxAmount', null))
+        && d().active is bool && d().sortOrder is int && d().updatedAt == request.time;
+      allow delete: if perm('manageP2p');
+    }
+
+    // ------------------------------------------- orders & conversations
+    // Written exclusively by Cloud Functions (checkout, status, assignment).
+    match /orders/{id} {
+      allow read: if active() && (resource.data.customerId == uid()
+        || (isStaff() && resource.data.staffId == uid()) || isOwner());
+      allow write: if false;
+    }
+
+    match /conversations/{cid} {
+      allow read: if canAccess(resource.data);
+      allow write: if false;
+
+      match /messages/{mid} {
+        allow read: if canAccess(conv(cid));
+        allow create: if canAccess(conv(cid))
+          && d().keys().hasOnly(['senderId', 'body', 'attachment', 'createdAt'])
+          && d().senderId == uid()
+          && d().createdAt == request.time
+          && optStr(d().get('body', null), 4000)
+          && (d().get('attachment', null) == null || (
+                d().attachment.keys().hasOnly(['path', 'type', 'name'])
+                && d().attachment.path is string
+                && d().attachment.path.matches('chat/' + cid + '/[A-Za-z0-9._-]{1,120}')
+                && d().attachment.type in ['image', 'video', 'pdf']
+                && optStr(d().attachment.get('name', null), 200)))
+          && (d().get('body', null) != null || d().get('attachment', null) != null);
+        allow update, delete: if false;
+      }
+    }
+
+    // Server-only bookkeeping (rate limits, counters).
+    match /_private/{doc=**} {
+      allow read, write: if false;
+    }
+  }
+}

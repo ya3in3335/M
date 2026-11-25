@@ -1,6 +1,8 @@
 package com.medk.app.core
 
-import io.github.jan.supabase.exceptions.RestException
+import com.google.firebase.FirebaseNetworkException
+import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.functions.FirebaseFunctionsException
 import java.io.IOException
 import java.text.NumberFormat
 import java.time.OffsetDateTime
@@ -17,10 +19,16 @@ sealed interface UiState<out T> {
 
 /** Turns any thrown error into a readable Arabic message. */
 fun Throwable.friendly(): String {
-    val raw = (this as? RestException)?.let { it.error + " " + (it.description ?: "") } ?: message.orEmpty()
+    val raw = when (this) {
+        is FirebaseFunctionsException -> "${code.name} ${message.orEmpty()}"
+        is FirebaseFirestoreException -> "${code.name} ${message.orEmpty()}"
+        else -> message.orEmpty()
+    }
     val m = raw.lowercase()
     return when {
-        this is IOException || m.contains("unable to resolve host") || m.contains("timeout") || m.contains("failed to connect") ->
+        this is FirebaseNetworkException || (this is FirebaseFirestoreException && code == FirebaseFirestoreException.Code.UNAVAILABLE) ||
+            (this is FirebaseFunctionsException && code == FirebaseFunctionsException.Code.UNAVAILABLE) ||
+            this is IOException || m.contains("unable to resolve host") || m.contains("timeout") || m.contains("failed to connect") ->
             "تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت."
         m.contains("password is invalid") || m.contains("invalid_login") || m.contains("credential is incorrect") ||
             m.contains("invalid-credential") || m.contains("supplied auth credential") -> "البريد الإلكتروني أو كلمة المرور غير صحيحة."
@@ -33,9 +41,14 @@ fun Throwable.friendly(): String {
         m.contains("recent") && m.contains("login") -> "لأسباب أمنية، سجّل الدخول من جديد ثم أعد المحاولة."
         m.contains("insufficient stock") -> "الكمية المطلوبة غير متوفرة حالياً."
         m.contains("no available products") -> "المنتجات في السلة لم تعد متوفرة."
-        m.contains("row-level security") || m.contains("permission denied") || m.contains("forbidden") || m.contains("owner only") ->
+        m.contains("resource_exhausted") || m.contains("too many requests") -> "طلبات كثيرة خلال وقت قصير، انتظر دقيقة ثم أعد المحاولة."
+        m.contains("app check") || m.contains("app_check") -> "تعذر التحقق من سلامة التطبيق. ثبّت النسخة الرسمية من التطبيق."
+        m.contains("permission_denied") || m.contains("insufficient permissions") || m.contains("permission denied") ||
+            m.contains("forbidden") || m.contains("owner only") ->
             "ليست لديك صلاحية لتنفيذ هذا الإجراء."
-        m.contains("jwt") || m.contains("invalid token") || m.contains("401") -> "انتهت الجلسة، يرجى تسجيل الدخول مجدداً."
+        m.contains("unauthenticated") || m.contains("401") -> "انتهت الجلسة، يرجى تسجيل الدخول مجدداً."
+        m.contains("cannot change an owner") -> "لا يمكن تعديل حساب المالك."
+        m.contains("not a seller") || m.contains("target is not a seller") -> "هذا الحساب ليس بائعاً."
         else -> message?.take(160) ?: "حدث خطأ غير متوقع."
     }
 }

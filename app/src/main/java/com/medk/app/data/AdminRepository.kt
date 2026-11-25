@@ -1,70 +1,72 @@
 package com.medk.app.data
 
 import android.net.Uri
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.Query
+import com.google.firebase.storage.StorageMetadata
 import com.medk.app.core.AppContainer
-import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.postgrest.query.Order
-import io.github.jan.supabase.storage.storage
-import io.ktor.http.ContentType
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.put
+import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
-/** Owner / staff management operations. Privileged Firebase operations go through the admin-staff Edge Function. */
+/**
+ * Owner / seller management. Account, role and permission changes go through Cloud Functions;
+ * catalog edits are direct Firestore writes validated by the security rules.
+ */
 open class AdminRepository(private val c: AppContainer) {
-    private val db get() = c.supabase
+    private val db get() = c.firestore
+    private val users get() = db.collection("users")
 
-    open suspend fun stats(): DashboardStats =
-        c.json.decodeFromString(db.postgrest.rpc("dashboard_stats").data)
+    @Suppress("UNCHECKED_CAST")
+    open suspend fun stats(): DashboardStats {
+        val m = c.cloud.call("dashboardStats")
+        fun i(k: String) = (m[k] as? Number)?.toInt() ?: 0
+        fun d(k: String) = (m[k] as? Number)?.toDouble() ?: 0.0
+        return DashboardStats(i("total_orders"), i("open_orders"), i("paid_orders"), i("delivered_orders"), i("closed_orders"),
+            d("revenue_usd"), d("revenue_dzd"), i("open_conversations"), i("unassigned_orders"), i("products"), i("staff"), i("customers"))
+    }
 
-    // ---------------- staff
+    // ---------------- people
     open suspend fun staff(): List<Profile> =
-        db.from("profiles").select { filter { isIn("role", listOf("staff", "owner")) }; order("created_at", Order.ASCENDING) }.decodeList()
+        users.whereIn("role", listOf("staff", "owner")).get().await().documents.map { it.toProfile() }.sortedBy { it.createdAt }
 
+    open suspend fun customers(): List<Profile> =
+        users.whereEqualTo("role", "customer").orderBy("createdAt", Query.Direction.DESCENDING).limit(500)
+            .get().await().documents.map { it.toProfile() }
+
+    private fun permsMap(p: StaffPermissions) = mapOf(
+        "manage_products" to p.manageProducts, "update_orders" to p.updateOrders,
+        "manage_p2p" to p.manageP2p, "view_stats" to p.viewStats,
+    )
+
+    @Suppress("UNCHECKED_CAST")
     open suspend fun createStaff(name: String, email: String, password: String, perms: StaffPermissions): Profile {
-        val res = c.edge.call("admin-staff", buildJsonObject {
-            put("action", "create"); put("full_name", name); put("email", email); put("password", password)
-            put("can_manage_products", perms.manageProducts); put("can_update_orders", perms.updateOrders)
-            put("can_manage_p2p", perms.manageP2p); put("can_view_stats", perms.viewStats)
-        })
-        return c.json.decodeFromJsonElement(res["profile"]!!.jsonObject)
+        val res = c.cloud.call("adminCreateStaff", mapOf("full_name" to name, "email" to email, "password" to password, "perms" to permsMap(perms)))
+        return profileFromFunction(res["profile"] as Map<String, Any?>)
     }
 
     open suspend fun setStaffPassword(uid: String, password: String) {
-        c.edge.call("admin-staff", buildJsonObject { put("action", "set_password"); put("uid", uid); put("password", password) })
+        c.cloud.call("adminSetPassword", mapOf("uid" to uid, "password" to password))
     }
 
-    /** Activates / suspends any staff or customer account (Firebase + profile). */
+    /** Activates / suspends any seller or customer account (Firebase Auth + profile). */
     open suspend fun setUserActive(uid: String, active: Boolean) {
-        c.edge.call("admin-staff", buildJsonObject { put("action", "set_active"); put("uid", uid); put("active", active) })
+        c.cloud.call("adminSetActive", mapOf("uid" to uid, "active" to active))
     }
 
     /** Promotes a customer to seller or demotes a seller to customer. */
     open suspend fun setRole(uid: String, role: Role) {
-        c.edge.call("admin-staff", buildJsonObject { put("action", "set_role"); put("uid", uid); put("role", role.name.lowercase()) })
+        c.cloud.call("adminSetRole", mapOf("uid" to uid, "role" to role.name.lowercase()))
     }
-
-    open suspend fun customers(): List<Profile> =
-        db.from("profiles").select { filter { eq("role", "customer") }; order("created_at", Order.DESCENDING) }.decodeList()
 
     open suspend fun setPermissions(uid: String, perms: StaffPermissions, sectionIds: Set<String>) {
-        db.from("profiles").update({
-            set("can_manage_products", perms.manageProducts); set("can_update_orders", perms.updateOrders)
-            set("can_manage_p2p", perms.manageP2p); set("can_view_stats", perms.viewStats)
-        }) { filter { eq("id", uid) } }
-        db.from("staff_sections").delete { filter { eq("staff_id", uid) } }
-        if (sectionIds.isNotEmpty()) db.from("staff_sections").insert(sectionIds.map { StaffSection(uid, it) })
+        c.cloud.call("adminSetPermissions", mapOf("uid" to uid, "perms" to permsMap(perms), "sections" to sectionIds.toList()))
     }
 
+    @Suppress("UNCHECKED_CAST")
     open suspend fun staffSections(uid: String): Set<String> =
-        db.from("staff_sections").select { filter { eq("staff_id", uid) } }.decodeList<StaffSection>().map { it.sectionId }.toSet()
+        (users.document(uid).get().await().get("sections") as? List<String>).orEmpty().toSet()
 
-    /** Sections the current staff member may work in (owner: all). */
+    /** Sections the current seller may work in (owner: all). */
     open suspend fun mySectionIds(profile: Profile): Set<String>? {
         if (profile.roleEnum == Role.OWNER) return null
         val explicit = staffSections(profile.id)
@@ -74,47 +76,62 @@ open class AdminRepository(private val c: AppContainer) {
 
     // ---------------- catalog
     open suspend fun updateCategory(cat: Category) {
-        db.from("categories").update({
-            set("name", cat.name); set("description", cat.description)
-            set("sort_order", cat.sortOrder); set("is_active", cat.isActive)
-        }) { filter { eq("id", cat.id) } }
+        db.collection("categories").document(cat.id).update(mapOf(
+            "name" to cat.name, "description" to cat.description, "sortOrder" to cat.sortOrder, "active" to cat.isActive,
+        )).await()
         c.catalog.invalidate()
     }
 
     open suspend fun saveSection(id: String?, input: SectionInput) {
-        if (id == null) db.from("sections").insert(input) else db.from("sections").update(input) { filter { eq("id", id) } }
+        val data = mapOf(
+            "categoryId" to input.categoryId, "name" to input.name, "description" to input.description, "imageUrl" to input.imageUrl,
+            "assignedStaffId" to input.assignedStaffId, "sortOrder" to input.sortOrder, "active" to input.isActive,
+        )
+        if (id == null) db.collection("sections").add(data + ("createdAt" to FieldValue.serverTimestamp())).await()
+        else db.collection("sections").document(id).update(data).await()
         c.catalog.invalidate()
     }
 
-    open suspend fun deleteSection(id: String) { db.from("sections").delete { filter { eq("id", id) } }; c.catalog.invalidate() }
+    open suspend fun deleteSection(id: String) { db.collection("sections").document(id).delete().await(); c.catalog.invalidate() }
 
     open suspend fun saveProduct(id: String?, input: ProductInput) {
-        if (id == null) db.from("products").insert(input) else db.from("products").update(input) { filter { eq("id", id) } }
+        val data = mapOf(
+            "categoryId" to input.categoryId, "sectionId" to input.sectionId, "name" to input.name, "description" to input.description,
+            "priceUsd" to input.priceUsd, "priceDzd" to input.priceDzd, "stock" to input.stock, "available" to input.isAvailable,
+            "images" to input.images, "updatedAt" to FieldValue.serverTimestamp(),
+        )
+        if (id == null) db.collection("products").add(data + ("createdAt" to FieldValue.serverTimestamp())).await()
+        else db.collection("products").document(id).update(data).await()
     }
 
-    open suspend fun deleteProduct(id: String) { db.from("products").delete { filter { eq("id", id) } } }
+    open suspend fun deleteProduct(id: String) { db.collection("products").document(id).delete().await() }
 
     open suspend fun saveBanner(id: String?, input: BannerInput) {
-        if (id == null) db.from("banners").insert(input) else db.from("banners").update(input) { filter { eq("id", id) } }
+        val data = mapOf("title" to input.title, "subtitle" to input.subtitle, "imageUrl" to input.imageUrl,
+            "categorySlug" to input.categorySlug, "sortOrder" to input.sortOrder, "active" to input.isActive)
+        if (id == null) db.collection("banners").add(data).await() else db.collection("banners").document(id).set(data).await()
     }
-    open suspend fun allBanners(): List<Banner> = db.from("banners").select { order("sort_order", Order.ASCENDING) }.decodeList()
-    open suspend fun deleteBanner(id: String) { db.from("banners").delete { filter { eq("id", id) } } }
+    open suspend fun allBanners(): List<Banner> = db.collection("banners").get().await().documents.map { it.toBanner() }.sortedBy { it.sortOrder }
+    open suspend fun deleteBanner(id: String) { db.collection("banners").document(id).delete().await() }
 
     open suspend fun saveP2p(id: String?, input: P2pAssetInput) {
-        if (id == null) db.from("p2p_assets").insert(input) else db.from("p2p_assets").update(input) { filter { eq("id", id) } }
+        val data = mapOf(
+            "code" to input.code, "name" to input.name, "network" to input.network, "buyPriceDzd" to input.buyPriceDzd,
+            "sellPriceDzd" to input.sellPriceDzd, "minAmount" to input.minAmount, "maxAmount" to input.maxAmount,
+            "active" to input.isActive, "updatedAt" to FieldValue.serverTimestamp(),
+        )
+        val col = db.collection("p2pAssets")
+        if (id == null) col.add(data + ("sortOrder" to col.get().await().size())).await() else col.document(id).update(data).await()
     }
-    open suspend fun deleteP2p(id: String) { db.from("p2p_assets").delete { filter { eq("id", id) } } }
+    open suspend fun deleteP2p(id: String) { db.collection("p2pAssets").document(id).delete().await() }
 
-    /** Uploads to the public product-images bucket and returns the public URL. */
+    /** Uploads to catalog/{folder}/ (public read) and returns the download URL. */
     open suspend fun uploadImage(uri: Uri, folder: String = "products"): String {
         val resolver = c.context.contentResolver
         val mime = resolver.getType(uri) ?: "image/jpeg"
-        require(mime.startsWith("image/")) { "يجب اختيار صورة" }
-        val bytes = withContext(Dispatchers.IO) { resolver.openInputStream(uri)?.use { it.readBytes() } } ?: error("تعذر قراءة الصورة")
-        require(bytes.size <= 10 * 1024 * 1024) { "حجم الصورة يتجاوز 10 ميغابايت" }
-        val path = "$folder/${UUID.randomUUID()}.${mime.substringAfter('/').substringBefore('+')}"
-        val bucket = db.storage.from("product-images")
-        bucket.upload(path, bytes) { upsert = false; contentType = ContentType.parse(mime) }
-        return bucket.publicUrl(path)
+        require(mime in setOf("image/jpeg", "image/png", "image/webp", "image/gif")) { "يجب اختيار صورة JPG أو PNG أو WEBP" }
+        val ref = c.storage.reference.child("catalog/$folder/${UUID.randomUUID()}.${mime.substringAfter('/')}")
+        ref.putFile(uri, StorageMetadata.Builder().setContentType(mime).build()).await()
+        return ref.downloadUrl.await().toString()
     }
 }

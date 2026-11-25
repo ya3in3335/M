@@ -8,12 +8,6 @@
 -keepclasseswithmembers class com.medk.app.** { kotlinx.serialization.KSerializer serializer(...); }
 -keep @kotlinx.serialization.Serializable class com.medk.app.** { *; }
 
-# Ktor / Supabase
--keep class io.ktor.** { *; }
--keep class io.github.jan.supabase.** { *; }
--dontwarn io.ktor.**
--dontwarn org.slf4j.**
--dontwarn java.lang.management.**
 
 # Credential Manager / Google ID
 -if class androidx.credentials.CredentialManager

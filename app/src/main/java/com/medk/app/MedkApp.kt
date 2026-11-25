@@ -13,6 +13,8 @@ class MedkApp : Application() {
         super.onCreate()
         instance = this
         container = AppContainer(this)
+        // App Check: Play Integrity in release, debug provider in debug builds.
+        if (container.firebaseConfigured) runCatching { com.medk.app.core.AppCheckSetup.install() }
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, getString(R.string.notif_channel), NotificationManager.IMPORTANCE_DEFAULT)

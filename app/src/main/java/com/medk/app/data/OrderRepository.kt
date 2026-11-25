@@ -1,48 +1,45 @@
 package com.medk.app.data
 
+import com.google.firebase.firestore.Query
 import com.medk.app.core.AppContainer
-import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.postgrest.query.Columns
-import io.github.jan.supabase.postgrest.query.Order as SortOrder
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import kotlinx.coroutines.tasks.await
 
+/** Orders are created and changed only by Cloud Functions; the app reads them. */
 open class OrderRepository(private val c: AppContainer) {
-    private val db get() = c.supabase
-    private val withItems = Columns.raw("*, order_items(*)")
+    private val db get() = c.firestore
 
-    /** Orders visible to the current user (RLS scopes customers/staff/owner). */
+    /** Orders visible to the current user: own orders, assigned orders (seller) or all (owner). */
     open suspend fun visibleOrders(status: OrderStatus? = null, onlyMine: Boolean = false): List<Order> {
-        val uid = c.auth.currentUid
-        return db.from("orders").select(withItems) {
-            filter {
-                if (status != null) eq("status", status.key)
-                if (onlyMine && uid != null) eq("customer_id", uid)
-            }
-            order("created_at", SortOrder.DESCENDING)
-        }.decodeList()
+        val uid = c.auth.currentUid ?: return emptyList()
+        val role = c.auth.profile?.roleEnum ?: Role.CUSTOMER
+        val base = db.collection("orders")
+        val q: Query = when {
+            onlyMine || role == Role.CUSTOMER -> base.whereEqualTo("customerId", uid)
+            role == Role.STAFF -> base.whereEqualTo("staffId", uid)
+            else -> base
+        }
+        return q.orderBy("createdAt", Query.Direction.DESCENDING).limit(300).get().await().documents
+            .map { it.toOrder() }.filter { status == null || it.status == status.key }
     }
 
-    open suspend fun order(id: String): Order =
-        db.from("orders").select(withItems) { filter { eq("id", id) } }.decodeSingle()
+    open suspend fun order(id: String): Order {
+        val d = db.collection("orders").document(id).get().await()
+        if (!d.exists()) error("الطلب غير موجود")
+        return d.toOrder()
+    }
 
     open suspend fun updateStatus(orderId: String, status: OrderStatus) {
-        db.from("orders").update({ set("status", status.key) }) { filter { eq("id", orderId) } }
+        c.cloud.call("setOrderStatus", mapOf("order_id" to orderId, "status" to status.key))
     }
 
     open suspend fun assignStaff(orderId: String, staffId: String?) {
-        db.from("orders").update({ set("staff_id", staffId) }) { filter { eq("id", orderId) } }
+        c.cloud.call("assignOrder", mapOf("order_id" to orderId, "staff_id" to staffId))
     }
 
-    /** Server-side checkout: one order + conversation per assigned sales representative. */
-    open suspend fun checkout(lines: List<CartLine>, note: String?): List<CreatedOrder> {
-        val items = buildJsonArray {
-            lines.forEach { l -> add(buildJsonObject { put("product_id", l.productId); put("quantity", l.quantity) }) }
-        }
-        return db.postgrest.rpc("create_orders_from_cart", buildJsonObject {
-            put("p_items", items); put("p_note", note?.takeIf { it.isNotBlank() })
-        }).decodeList()
-    }
+    /** Server-side checkout: one order + conversation per assigned seller; prices are read on the server. */
+    open suspend fun checkout(lines: List<CartLine>, note: String?): List<CreatedOrder> =
+        c.cloud.callList("checkout", mapOf(
+            "items" to lines.map { mapOf("product_id" to it.productId, "quantity" to it.quantity) },
+            "note" to note?.takeIf { it.isNotBlank() },
+        )).map { CreatedOrder(it["order_id"] as String, it["conversation_id"] as String, it["reference"] as String) }
 }
