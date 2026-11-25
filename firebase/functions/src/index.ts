@@ -33,6 +33,12 @@ async function syncClaims(uid: string, role: Role) {
   return false;
 }
 
+function isOwnerEmail(email: string | undefined): boolean {
+  const e = (email ?? "").trim().toLowerCase();
+  const owners = OWNER_EMAILS.value().split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  return e.length > 0 && owners.includes(e);
+}
+
 // ================================================================ bootstrap
 /** Called after every sign-in: creates the profile, syncs the role claim. */
 export const bootstrap = onCall(callOpts(), async (req) => {
@@ -42,10 +48,8 @@ export const bootstrap = onCall(callOpts(), async (req) => {
   const ref = db.doc(`users/${uid}`);
   let snap = await ref.get();
   if (!snap.exists) {
-    const email = (token.email ?? "").toLowerCase();
-    const owners = OWNER_EMAILS.value().split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
     // Owner promotion only for VERIFIED e-mails, so nobody can pre-register the owner's address.
-    const role: Role = email && token.email_verified === true && owners.includes(email) ? "owner" : "customer";
+    const role: Role = token.email_verified === true && isOwnerEmail(token.email) ? "owner" : "customer";
     const fullName = (str((req.data as { full_name?: unknown })?.full_name, "full_name", 80, false) ?? token.name ?? null) as string | null;
     const doc: UserDoc = {
       email: token.email ?? null, fullName, avatarUrl: (token.picture as string | undefined) ?? null,
@@ -56,8 +60,14 @@ export const bootstrap = onCall(callOpts(), async (req) => {
     if (role === "owner") await seedCatalogIfEmpty();
     snap = await ref.get();
   }
-  const user = snap.data() as UserDoc;
+  let user = snap.data() as UserDoc;
   if (!user.active) fail("permission-denied", "account_disabled");
+  // An owner who signed up with e-mail/password is promoted once the address is verified.
+  if (user.role === "customer" && token.email_verified === true && isOwnerEmail(token.email)) {
+    await ref.update({ role: "owner", perms: OWNER_PERMS, updatedAt: FieldValue.serverTimestamp() });
+    await seedCatalogIfEmpty();
+    user = (await ref.get()).data() as UserDoc;
+  }
   const claimsUpdated = await syncClaims(uid, user.role);
   return { profile: publicUser(uid, user), claims_updated: claimsUpdated };
 });

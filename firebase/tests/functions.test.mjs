@@ -39,10 +39,9 @@ describe("cloud functions", function () {
     await login("owner@test.dev", false);
     const u = (await adb.doc(`users/${auth.currentUser.uid}`).get()).data();
     assert.equal(u.role, "customer");
-    await adb.doc(`users/${auth.currentUser.uid}`).delete();
   });
 
-  it("verified owner e-mail becomes owner and seeds the catalog", async () => {
+  it("the same account is promoted after verifying the e-mail, and seeds the catalog", async () => {
     owner = await login("owner@test.dev", true);
     const u = (await adb.doc(`users/${owner}`).get()).data();
     assert.equal(u.role, "owner");
