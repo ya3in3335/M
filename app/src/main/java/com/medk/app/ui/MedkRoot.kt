@@ -72,6 +72,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -359,27 +362,42 @@ private fun BottomBar(current: String?, cartCount: Int, onSelect: (String) -> Un
     ClassicNavBar(tabs, current, mapOf(Routes.CART to cartCount), onSelect)
 }
 
-/** Standard Material bottom navigation bar. */
+/** Floating, pill-shaped "glass" bottom bar (shared by the store and owner apps). */
 @Composable
 fun ClassicNavBar(tabs: List<Tab>, current: String?, badges: Map<String, Int>, onSelect: (String) -> Unit) {
-    androidx.compose.material3.NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow, tonalElevation = 0.dp,
-        modifier = Modifier.height(72.dp + androidx.compose.foundation.layout.WindowInsets.navigationBars
-            .asPaddingValues().calculateBottomPadding())) {
-        tabs.forEach { t ->
-            val sel = current == t.route
-            NavigationBarItem(
-                selected = sel, onClick = { onSelect(t.route) },
-                icon = {
-                    androidx.compose.material3.BadgedBox(badge = {
-                        val n = badges[t.route] ?: 0
-                        if (n > 0) androidx.compose.material3.Badge { Text(if (n > 9) "9+" else "$n") }
-                    }) { Icon(if (sel) t.selectedIcon else t.icon, t.label, Modifier.size(22.dp)) }
-                },
-                label = { Text(t.label, style = MaterialTheme.typography.labelSmall) },
-                colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                    selectedIconColor = MedkColors.Violet, selectedTextColor = MedkColors.Violet,
-                    indicatorColor = MedkColors.Purple.copy(alpha = .18f)),
-            )
+    val dark = com.medk.app.ui.theme.LocalIsDark.current
+    val pill = RoundedCornerShape(50)
+    val glassFill = if (dark) Brush.verticalGradient(listOf(Color(0xFF2A2340).copy(alpha = .78f), Color(0xFF15121F).copy(alpha = .70f)))
+                    else Brush.verticalGradient(listOf(Color.White.copy(alpha = .92f), Color(0xFFF1ECFA).copy(alpha = .80f)))
+    val sheen = Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) .10f else .55f), Color.Transparent), endY = 90f)
+    val rim = Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) .28f else .9f), MedkColors.Violet.copy(alpha = .22f)))
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Row(
+            Modifier.fillMaxWidth().height(66.dp)
+                .shadow(18.dp, pill, ambientColor = MedkColors.Purple.copy(alpha = .35f), spotColor = MedkColors.Purple.copy(alpha = .45f))
+                .clip(pill).background(glassFill).background(sheen).border(1.dp, rim, pill)
+                .padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            tabs.forEach { t ->
+                val sel = current == t.route
+                val bg by androidx.compose.animation.animateColorAsState(
+                    if (sel) MedkColors.Purple.copy(alpha = if (dark) .55f else .16f) else Color.Transparent, label = "tabBg")
+                val tint by androidx.compose.animation.animateColorAsState(
+                    if (sel) (if (dark) Color.White else MedkColors.Purple) else MaterialTheme.colorScheme.onSurfaceVariant, label = "tabTint")
+                Column(
+                    Modifier.weight(1f).height(54.dp).clip(pill).background(bg)
+                        .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null) { onSelect(t.route) },
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+                ) {
+                    Box {
+                        Icon(if (sel) t.selectedIcon else t.icon, t.label, tint = tint, modifier = Modifier.size(22.dp))
+                        CountBadge(badges[t.route] ?: 0, Modifier.align(Alignment.TopEnd).offset(x = 9.dp, y = (-5).dp))
+                    }
+                    Text(t.label, style = MaterialTheme.typography.labelSmall, color = tint, maxLines = 1)
+                }
+            }
         }
     }
 }

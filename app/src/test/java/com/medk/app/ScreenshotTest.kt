@@ -12,6 +12,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
@@ -59,6 +64,21 @@ class ScreenshotTest {
     @Test fun splash() = shot("01_splash") { SplashScreen() }
     @Test fun welcome() = shot("02_welcome") { WelcomeScreen({}, {}) }
     @Test fun login() = shot("03_login") { LoginScreen({}, {}, {}) }
+
+    private fun bar() = listOf(
+        com.medk.app.ui.Tab("home", "الرئيسية", androidx.compose.material.icons.Icons.Filled.Home, androidx.compose.material.icons.Icons.Filled.Home),
+        com.medk.app.ui.Tab("cat", "الأقسام", androidx.compose.material.icons.Icons.Filled.GridView, androidx.compose.material.icons.Icons.Filled.GridView),
+        com.medk.app.ui.Tab("cart", "السلة", androidx.compose.material.icons.Icons.Filled.ShoppingCart, androidx.compose.material.icons.Icons.Filled.ShoppingCart),
+        com.medk.app.ui.Tab("chat", "محادثاتي", androidx.compose.material.icons.Icons.Filled.Email, androidx.compose.material.icons.Icons.Filled.Email),
+        com.medk.app.ui.Tab("me", "حسابي", androidx.compose.material.icons.Icons.Filled.Person, androidx.compose.material.icons.Icons.Filled.Person))
+    @Test fun navBarDark() = shot("10_navbar_dark") {
+        Column(Modifier.padding(top = 24.dp)) { categories.take(2).forEach { CategoryCard(it, {}, Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) }
+            com.medk.app.ui.ClassicNavBar(bar(), "home", mapOf("cart" to 2)) {} }
+    }
+    @Test fun navBarLight() = shot("11_navbar_light", dark = false) {
+        Column(Modifier.padding(top = 24.dp)) { categories.take(2).forEach { CategoryCard(it, {}, Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) }
+            com.medk.app.ui.ClassicNavBar(bar(), "cart", mapOf("cart" to 2)) {} }
+    }
 
     @Test fun offline() = shot("08_offline") { com.medk.app.ui.system.OfflineScreen {} }
     @Test fun updateDialog() = shot("09_update") {
