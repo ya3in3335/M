@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -94,22 +95,17 @@ fun MedkWordmark(fontSize: TextUnit = 22.sp, subtitle: Boolean = false, modifier
     }
 }
 
-/** MK monogram inside a chamfered square — same design as the launcher icon. */
+/** Classic app logo: "MK" on a rounded purple tile. */
 @Composable
 fun MedkMark(size: Dp = 64.dp, modifier: Modifier = Modifier) {
-    Box(modifier.size(size), contentAlignment = Alignment.Center) {
-        Box(Modifier.fillMaxSize().clip(MedkShapes.Emblem).background(Brush.linearGradient(listOf(MedkColors.Violet, MedkColors.Purple))))
-        Box(Modifier.fillMaxSize(.86f).clip(MedkShapes.Emblem).background(MaterialTheme.colorScheme.background))
-        Text(
-            buildAnnotatedString { append("M"); withStyle(SpanStyle(color = MedkColors.Violet)) { append("K") } },
-            color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = (size.value * 0.34f).sp,
-            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, letterSpacing = (-1).sp,
-            style = MaterialTheme.typography.titleLarge.copy(lineHeight = (size.value * 0.4f).sp),
-        )
+    Box(modifier.size(size).clip(MedkShapes.Logo).background(Brush.linearGradient(listOf(MedkColors.Violet, MedkColors.Purple))),
+        contentAlignment = Alignment.Center) {
+        Text("MK", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = (size.value * 0.36f).sp,
+            letterSpacing = (-1).sp, style = MaterialTheme.typography.titleLarge.copy(lineHeight = (size.value * 0.42f).sp))
     }
 }
 
-/** Small chamfered badge holding an icon. */
+/** Circular badge holding an icon. */
 @Composable
 fun EmblemIcon(icon: ImageVector, brush: Brush, size: Dp = 36.dp, iconTint: Color = Color.White, modifier: Modifier = Modifier) {
     Box(modifier.size(size).clip(MedkShapes.Emblem).background(brush), contentAlignment = Alignment.Center) {
@@ -126,7 +122,7 @@ fun PrimaryButton(
     val active = enabled && !loading
     Box(
         modifier.fillMaxWidth().height(height.coerceAtMost(46.dp)).clip(MedkShapes.ChamferSm)
-            .background(if (active) MedkColors.PrimaryGradient else SolidColor(MaterialTheme.colorScheme.surfaceContainerHighest))
+            .background(if (active) SolidColor(MedkColors.Purple) else SolidColor(MaterialTheme.colorScheme.surfaceContainerHighest))
             .clickable(enabled = active, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -148,6 +144,7 @@ fun SecondaryButton(
         onClick = onClick, enabled = enabled, modifier = modifier.fillMaxWidth().height(height.coerceAtMost(46.dp)),
         shape = MedkShapes.ChamferSm, color = MaterialTheme.colorScheme.surfaceContainer,
         border = BorderStroke(1.dp, if (color == MaterialTheme.colorScheme.onSurface) MaterialTheme.colorScheme.outline else color.copy(.5f)),
+        // classic outlined button
     ) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             if (icon != null) { Icon(icon, null, tint = color, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(7.dp)) }
@@ -217,35 +214,22 @@ fun MedkTopBar(
             windowInsets = androidx.compose.foundation.layout.WindowInsets(0),
             colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
         )
-        TechRule()
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
-/** Hairline with a short accent segment — the "engineered" divider. */
+/** Simple divider (kept name for existing call sites). */
 @Composable
-fun TechRule(modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant)) {
-        Box(Modifier.width(28.dp).height(1.dp).background(MedkColors.Violet))
-    }
-}
+fun TechRule(modifier: Modifier = Modifier) = HorizontalDivider(modifier, color = MaterialTheme.colorScheme.outlineVariant)
 
 // --------------------------------------------------------- section header
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun SectionHeader(title: String, modifier: Modifier = Modifier, action: String? = null, onAction: (() -> Unit)? = null, index: Int? = null) {
-    Row(modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (index != null) {
-            Text(index.toString().padStart(2, '0'), style = MaterialTheme.typography.labelMedium, color = MedkColors.Violet,
-                modifier = Modifier.border(1.dp, MedkColors.Violet.copy(.5f), MedkShapes.ChamferXs).padding(horizontal = 5.dp, vertical = 1.dp))
-            Spacer(Modifier.width(8.dp))
-        } else {
-            Box(Modifier.size(8.dp).clip(MedkShapes.Emblem).background(MedkColors.Violet))
-            Spacer(Modifier.width(8.dp))
-        }
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.width(10.dp))
-        Box(Modifier.weight(1f).height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
+    Row(modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
         if (action != null && onAction != null) Text(
-            action, color = MedkColors.Violet, style = MaterialTheme.typography.labelMedium,
+            action, color = MedkColors.Violet, style = MaterialTheme.typography.labelLarge,
             modifier = Modifier.clip(MedkShapes.Small).clickable(onClick = onAction).padding(horizontal = 8.dp, vertical = 4.dp),
         )
     }
@@ -274,10 +258,8 @@ private fun StateMessage(icon: ImageVector, title: String, subtitle: String?, ac
                          modifier: Modifier, tint: Color = MedkColors.Violet) {
     Column(modifier.fillMaxWidth().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center) {
-        Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) {
-            Box(Modifier.fillMaxSize().clip(MedkShapes.Emblem).background(tint.copy(alpha = .35f)))
-            Box(Modifier.fillMaxSize(.9f).clip(MedkShapes.Emblem).background(MaterialTheme.colorScheme.background))
-            Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
+        Box(Modifier.size(64.dp).clip(CircleShape).background(tint.copy(alpha = .12f)), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = tint, modifier = Modifier.size(28.dp))
         }
         Spacer(Modifier.height(12.dp))
         Text(title, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
@@ -313,8 +295,7 @@ fun PriceBlock(usdValue: Double, dzdValue: Double, modifier: Modifier = Modifier
 
 @Composable
 fun Pill(text: String, color: Color, modifier: Modifier = Modifier, icon: ImageVector? = null) {
-    Row(modifier.clip(MedkShapes.ChamferXs).background(color.copy(alpha = .14f))
-        .border(1.dp, color.copy(.35f), MedkShapes.ChamferXs).padding(horizontal = 7.dp, vertical = 2.dp),
+    Row(modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = .15f)).padding(horizontal = 8.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically) {
         if (icon != null) { Icon(icon, null, tint = color, modifier = Modifier.size(11.dp)); Spacer(Modifier.width(3.dp)) }
         Text(text, color = color, style = MaterialTheme.typography.labelSmall)
@@ -324,16 +305,16 @@ fun Pill(text: String, color: Color, modifier: Modifier = Modifier, icon: ImageV
 @Composable
 fun QuantitySelector(value: Int, onChange: (Int) -> Unit, modifier: Modifier = Modifier, min: Int = 1, max: Int = 99, compact: Boolean = false) {
     val s = if (compact) 26.dp else 32.dp
-    Row(modifier.clip(MedkShapes.ChamferXs).border(1.dp, MaterialTheme.colorScheme.outline, MedkShapes.ChamferXs)
+    Row(modifier.clip(RoundedCornerShape(50)).border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(50))
         .background(MaterialTheme.colorScheme.surfaceContainer).padding(3.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(s).clip(MedkShapes.ChamferXs).background(MedkColors.PrimaryGradient)
+        Box(Modifier.size(s).clip(CircleShape).background(MedkColors.PrimaryGradient)
             .clickable(enabled = value < max) { onChange(value + 1) }, contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Add, "زيادة", tint = Color.White, modifier = Modifier.size(15.dp))
         }
         Text("$value", style = MaterialTheme.typography.titleSmall, modifier = Modifier.width(if (compact) 26.dp else 34.dp),
             textAlign = TextAlign.Center)
-        Box(Modifier.size(s).clip(MedkShapes.ChamferXs).background(MaterialTheme.colorScheme.surfaceContainerHighest)
+        Box(Modifier.size(s).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHighest)
             .clickable(enabled = value > min) { onChange(value - 1) }, contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Remove, "إنقاص", modifier = Modifier.size(15.dp))
         }

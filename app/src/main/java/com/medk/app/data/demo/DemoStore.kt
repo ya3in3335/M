@@ -32,9 +32,12 @@ object DemoStore {
 
     val profiles = mutableMapOf(
         CUSTOMER to Profile(CUSTOMER, "customer@demo.medk", "عميل تجريبي", role = "customer", createdAt = now(9000)),
-        STAFF_GAMES to Profile(STAFF_GAMES, "games@demo.medk", "أمين — بائع الألعاب", role = "staff", canManageProducts = true, createdAt = now(8000)),
+        STAFF_GAMES to Profile(STAFF_GAMES, "games@demo.medk", "أمين — بائع الألعاب", role = "staff", canManageProducts = true, canViewStats = true, createdAt = now(8000)),
         STAFF_APPS to Profile(STAFF_APPS, "apps@demo.medk", "سارة — بائعة الاشتراكات", role = "staff", canManageProducts = false, createdAt = now(7000)),
         OWNER to Profile(OWNER, "owner@demo.medk", "مالك MED-K", role = "owner", canManageProducts = true, createdAt = now(10000)),
+        "demo_c2" to Profile("demo_c2", "yacine.b@demo.medk", "ياسين ب.", role = "customer", createdAt = now(4000)),
+        "demo_c3" to Profile("demo_c3", "amina.k@demo.medk", "أمينة ك.", role = "customer", createdAt = now(2500)),
+        "demo_c4" to Profile("demo_c4", "walid.m@demo.medk", "وليد م.", role = "customer", isActive = false, createdAt = now(1500)),
     )
 
     val categories = mutableListOf(

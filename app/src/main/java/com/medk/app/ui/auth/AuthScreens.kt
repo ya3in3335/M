@@ -78,7 +78,6 @@ import com.medk.app.ui.components.PrimaryButton
 import com.medk.app.ui.components.SecondaryButton
 import com.medk.app.ui.components.categoryIcon
 import com.medk.app.ui.theme.MedkColors
-import com.medk.app.ui.theme.blueprintGrid
 import com.medk.app.ui.theme.categoryPalette
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -125,8 +124,7 @@ fun SplashScreen() {
         alpha.animateTo(1f, tween(600))
     }
     val t = rememberInfiniteTransition(label = "dots")
-    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF160A2B), MedkColors.Black, MedkColors.Black)))
-        .blueprintGrid(Color.White, 24f, .045f), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF160A2B), MedkColors.Black, MedkColors.Black))), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.scale(scale.value).alpha(alpha.value)) {
             MedkMark(88.dp)
             Spacer(Modifier.height(16.dp))
@@ -135,7 +133,7 @@ fun SplashScreen() {
         Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 72.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             repeat(3) { i ->
                 val a by t.animateFloat(.25f, 1f, infiniteRepeatable(tween(600, delayMillis = i * 180), RepeatMode.Reverse), label = "d$i")
-                Box(Modifier.size(9.dp).alpha(a).clip(com.medk.app.ui.theme.MedkShapes.Emblem).background(MedkColors.Violet))
+                Box(Modifier.size(9.dp).alpha(a).clip(CircleShape).background(MedkColors.Violet))
             }
         }
     }
@@ -146,20 +144,21 @@ fun SplashScreen() {
 fun WelcomeScreen(onLogin: () -> Unit, onRegister: () -> Unit, vm: AuthViewModel = viewModel()) {
     val t = rememberInfiniteTransition(label = "float")
     val y by t.animateFloat(-6f, 6f, infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "y")
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).blueprintGrid(Color.White, 24f, .035f)
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
         .statusBarsPadding().navigationBarsPadding()
         .padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(Modifier.height(8.dp))
         MedkWordmark(22.sp)
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(200.dp).clip(com.medk.app.ui.theme.MedkShapes.Emblem).background(MedkColors.Purple.copy(.10f)))
-            Box(Modifier.size(196.dp).clip(com.medk.app.ui.theme.MedkShapes.Emblem).background(MaterialTheme.colorScheme.background))
-            Box(Modifier.size(150.dp).clip(com.medk.app.ui.theme.MedkShapes.Emblem).background(MedkColors.Purple.copy(.08f)))
-            MedkMark(92.dp, Modifier.offset(y = y.dp))
-            listOf("gaming" to (0 to -100), "subscriptions" to (87 to -50), "accounts" to (87 to 50),
-                "p2p" to (0 to 100), "other" to (-87 to 50)).forEach { (key, pos) ->
-                Box(Modifier.offset(pos.first.dp, (pos.second - y / 2).dp)) {
-                    com.medk.app.ui.components.EmblemIcon(categoryIcon(key), categoryPalette(key).brush, 38.dp)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                MedkMark(96.dp, Modifier.offset(y = y.dp))
+                Spacer(Modifier.height(28.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    listOf("gaming", "subscriptions", "accounts", "p2p", "other").forEach { key ->
+                        Box(Modifier.size(42.dp).clip(CircleShape).background(categoryPalette(key).brush), contentAlignment = Alignment.Center) {
+                            Icon(categoryIcon(key), null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                    }
                 }
             }
         }
@@ -189,7 +188,8 @@ fun DemoLoginPanel(vm: AuthViewModel) {
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(com.medk.app.data.Role.CUSTOMER to "عميل", com.medk.app.data.Role.STAFF to "موظف", com.medk.app.data.Role.OWNER to "مالك")
+            (if (com.medk.app.BuildConfig.ADMIN_APP) listOf(com.medk.app.data.Role.OWNER to "دخول كمالك")
+            else listOf(com.medk.app.data.Role.CUSTOMER to "دخول كعميل", com.medk.app.data.Role.STAFF to "دخول كبائع"))
                 .forEach { (r, l) -> PrimaryButton(l, { vm.demo(r) }, Modifier.weight(1f), height = 36.dp) }
         }
     }
@@ -199,7 +199,7 @@ fun DemoLoginPanel(vm: AuthViewModel) {
 @Composable
 private fun AuthScaffold(title: String, subtitle: String, onBack: () -> Unit, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
-        MedkTopBar("", onBack = onBack)
+        if (com.medk.app.BuildConfig.ADMIN_APP) Spacer(Modifier.height(24.dp)) else MedkTopBar("", onBack = onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().navigationBarsPadding()
             .padding(horizontal = 20.dp)) {
             Spacer(Modifier.height(12.dp))
@@ -262,7 +262,8 @@ fun LoginScreen(onBack: () -> Unit, onRegister: () -> Unit, onForgot: () -> Unit
     val emailErr = if (submitted && !validEmail(email)) "أدخل بريداً إلكترونياً صحيحاً" else null
     val passErr = if (submitted && password.isEmpty()) "أدخل كلمة المرور" else null
 
-    AuthScaffold("تسجيل الدخول", "مرحباً بعودتك إلى MED-K", onBack) {
+    val admin = com.medk.app.BuildConfig.ADMIN_APP
+    AuthScaffold(if (admin) "لوحة تحكم MED-K" else "تسجيل الدخول", if (admin) "تسجيل دخول المالك" else "مرحباً بعودتك إلى MED-K", onBack) {
         DemoLoginPanel(vm)
         if (com.medk.app.BuildConfig.DEMO) Spacer(Modifier.height(16.dp))
         ErrorBanner(error)
@@ -281,7 +282,7 @@ fun LoginScreen(onBack: () -> Unit, onRegister: () -> Unit, onForgot: () -> Unit
         OrDivider()
         GoogleButton(busy == "google", busy == null) { vm.google(ctx) }
         Spacer(Modifier.height(16.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        if (!admin) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Text("ليس لديك حساب؟", color = MaterialTheme.colorScheme.onSurfaceVariant)
             TextButton(onClick = onRegister) { Text("إنشاء حساب", color = MedkColors.Violet, fontWeight = FontWeight.Bold) }
         }

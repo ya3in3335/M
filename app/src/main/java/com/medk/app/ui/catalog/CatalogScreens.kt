@@ -81,7 +81,6 @@ import com.medk.app.ui.components.loadVm
 import com.medk.app.ui.navigation.Routes
 import com.medk.app.ui.theme.CategoryPalette
 import com.medk.app.ui.theme.categoryPalette
-import com.medk.app.ui.theme.blueprintGrid
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.medk.app.ui.theme.MedkShapes
@@ -113,7 +112,6 @@ private fun CategoryTile(cat: Category, sectionCount: Int, onClick: () -> Unit) 
     val shape = com.medk.app.ui.theme.MedkShapes.Chamfer
     Column(Modifier.fillMaxWidth().clip(shape).background(MaterialTheme.colorScheme.surfaceContainer)
         .background(Brush.verticalGradient(listOf(p.start.copy(.28f), Color.Transparent)))
-        .blueprintGrid(Color.White, 14f, .04f)
         .border(1.dp, Brush.verticalGradient(listOf(p.accent.copy(.7f), MaterialTheme.colorScheme.outlineVariant)), shape)
         .clickable(onClick = onClick).padding(12.dp)) {
         CategoryArt(cat.iconKey ?: cat.slug, p, 46.dp)
@@ -156,7 +154,6 @@ private fun CategoryHeader(cat: Category, p: CategoryPalette, extra: String) {
     Row(Modifier.fillMaxWidth().clip(com.medk.app.ui.theme.MedkShapes.Chamfer)
         .background(MaterialTheme.colorScheme.surfaceContainer)
         .background(Brush.horizontalGradient(listOf(p.start.copy(.35f), Color.Transparent)))
-        .blueprintGrid(Color.White, 16f, .05f)
         .border(1.dp, Brush.horizontalGradient(listOf(p.accent.copy(.7f), MaterialTheme.colorScheme.outlineVariant)), com.medk.app.ui.theme.MedkShapes.Chamfer)
         .padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
         CategoryArt(cat.iconKey ?: cat.slug, p, 52.dp)

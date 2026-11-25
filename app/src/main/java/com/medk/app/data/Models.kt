@@ -17,8 +17,11 @@ data class Profile(
     @SerialName("is_active") val isActive: Boolean = true,
     @SerialName("can_manage_products") val canManageProducts: Boolean = false,
     @SerialName("can_update_orders") val canUpdateOrders: Boolean = true,
+    @SerialName("can_manage_p2p") val canManageP2p: Boolean = false,
+    @SerialName("can_view_stats") val canViewStats: Boolean = false,
     @SerialName("created_at") val createdAt: String? = null,
 ) {
+    val permissions get() = StaffPermissions(canManageProducts, canUpdateOrders, canManageP2p, canViewStats)
     val roleEnum get() = Role.of(role)
     val displayName get() = fullName?.takeIf { it.isNotBlank() } ?: email ?: "مستخدم"
 }
@@ -270,4 +273,12 @@ data class CartLine(
     val quantity: Int,
     val sectionId: String? = null,
     val sectionName: String? = null,
+)
+
+/** Fine-grained permissions the owner grants to each seller. */
+data class StaffPermissions(
+    val manageProducts: Boolean = false,
+    val updateOrders: Boolean = true,
+    val manageP2p: Boolean = false,
+    val viewStats: Boolean = false,
 )

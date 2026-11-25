@@ -31,6 +31,7 @@ import com.medk.app.data.Profile
 import com.medk.app.data.Role
 import com.medk.app.data.Section
 import com.medk.app.data.SectionInput
+import com.medk.app.data.StaffPermissions
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -167,6 +168,7 @@ class DemoOrderRepository(c: AppContainer) : OrderRepository(c) {
                 "طلب $ref" + if (secNames.isNotEmpty()) " — $secNames" else "", body, S.now(), S.now())
             S.messages += Message(S.id(), cid, uid, body, createdAt = S.now())
             S.notify(staff, "طلب جديد", "الطلب $ref", cid, oid)
+            S.profiles.values.filter { it.role == "owner" }.forEach { S.notify(it.id, "طلب جديد في المتجر", "الطلب $ref — ${"%.2f".format(usd)} USD", cid, oid) }
             CreatedOrder(oid, cid, ref)
         }
     }
@@ -244,6 +246,7 @@ class DemoChatRepository(private val c: AppContainer) : ChatRepository(c) {
 class DemoAdminRepository(private val c: AppContainer) : AdminRepository(c) {
     override suspend fun stats(): DashboardStats {
         net(); val p = me()
+        if (p.roleEnum != Role.OWNER && !p.canViewStats) error("forbidden")
         val o = S.orders.filter { p.roleEnum == Role.OWNER || it.staffId == p.id }
         val paidish = o.filter { it.status != "open" }
         return DashboardStats(o.size, o.count { it.status == "open" }, o.count { it.status == "paid" }, o.count { it.status == "delivered" },
@@ -253,16 +256,24 @@ class DemoAdminRepository(private val c: AppContainer) : AdminRepository(c) {
             S.profiles.values.count { it.role == "staff" }, S.profiles.values.count { it.role == "customer" })
     }
     override suspend fun staff() = run { net(); S.profiles.values.filter { it.role != "customer" }.sortedBy { it.createdAt } }
-    override suspend fun createStaff(name: String, email: String, password: String, manageProducts: Boolean, updateOrders: Boolean): Profile {
+    override suspend fun createStaff(name: String, email: String, password: String, perms: StaffPermissions): Profile {
         net(); if (!isOwner()) error("owner only")
         if (S.profiles.values.any { it.email.equals(email, true) }) error("email already in use")
-        val p = Profile("st_" + S.id().take(8), email, name, role = "staff", canManageProducts = manageProducts, canUpdateOrders = updateOrders, createdAt = S.now())
+        val p = Profile("st_" + S.id().take(8), email, name, role = "staff", canManageProducts = perms.manageProducts,
+            canUpdateOrders = perms.updateOrders, canManageP2p = perms.manageP2p, canViewStats = perms.viewStats, createdAt = S.now())
         S.profiles[p.id] = p; return p
     }
     override suspend fun setStaffPassword(uid: String, password: String) { net(); if (!isOwner()) error("owner only") }
-    override suspend fun setStaffActive(uid: String, active: Boolean) { net(); S.profiles[uid] = S.profiles.getValue(uid).copy(isActive = active) }
-    override suspend fun setPermissions(uid: String, manageProducts: Boolean, updateOrders: Boolean, sectionIds: Set<String>) {
-        net(); S.profiles[uid] = S.profiles.getValue(uid).copy(canManageProducts = manageProducts, canUpdateOrders = updateOrders)
+    override suspend fun setUserActive(uid: String, active: Boolean) { net(); if (!isOwner()) error("owner only"); S.profiles[uid] = S.profiles.getValue(uid).copy(isActive = active) }
+    override suspend fun setRole(uid: String, role: Role) {
+        net(); if (!isOwner() || uid == S.currentUid || role == Role.OWNER) error("permission denied")
+        S.profiles[uid] = S.profiles.getValue(uid).copy(role = role.name.lowercase())
+    }
+    override suspend fun customers() = run { net(); S.profiles.values.filter { it.role == "customer" }.sortedByDescending { it.createdAt } }
+    override suspend fun setPermissions(uid: String, perms: StaffPermissions, sectionIds: Set<String>) {
+        net(); if (!isOwner()) error("owner only")
+        S.profiles[uid] = S.profiles.getValue(uid).copy(canManageProducts = perms.manageProducts, canUpdateOrders = perms.updateOrders,
+            canManageP2p = perms.manageP2p, canViewStats = perms.viewStats)
         S.staffSections[uid] = sectionIds.toMutableSet()
     }
     override suspend fun staffSections(uid: String): Set<String> = S.staffSections[uid].orEmpty().toSet()
@@ -286,11 +297,15 @@ class DemoAdminRepository(private val c: AppContainer) : AdminRepository(c) {
     override suspend fun allBanners() = S.banners.sortedBy { it.sortOrder }
     override suspend fun deleteBanner(id: String) { S.banners.removeAll { it.id == id } }
     override suspend fun saveP2p(id: String?, input: P2pAssetInput) {
+        if (!isOwner() && !me().canManageP2p) error("permission denied")
         val a = P2pAsset(id ?: S.id(), input.code, input.name, input.network, input.buyPriceDzd, input.sellPriceDzd, input.minAmount, input.maxAmount,
             input.isActive, S.p2p.size, S.now())
         if (id == null) S.p2p += a else S.p2p.replaceAll { if (it.id == id) a.copy(sortOrder = it.sortOrder) else it }
     }
-    override suspend fun deleteP2p(id: String) { S.p2p.removeAll { it.id == id } }
+    override suspend fun deleteP2p(id: String) {
+        if (!isOwner() && !me().canManageP2p) error("permission denied")
+        S.p2p.removeAll { it.id == id }
+    }
     override suspend fun uploadImage(uri: Uri, folder: String): String {
         delay(400)
         // keep read access to the picked image for the demo session

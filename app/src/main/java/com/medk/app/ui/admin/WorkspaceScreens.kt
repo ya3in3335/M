@@ -33,7 +33,9 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Paid
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PendingActions
 import androidx.compose.material.icons.filled.SpaceDashboard
 import androidx.compose.material.icons.filled.Storefront
@@ -78,7 +80,6 @@ import com.medk.app.ui.navigation.Routes
 import com.medk.app.ui.navigation.toTab
 import com.medk.app.ui.orders.OrderCard
 import com.medk.app.ui.theme.MedkColors
-import com.medk.app.ui.theme.blueprintGrid
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import com.medk.app.ui.theme.MedkShapes
@@ -87,13 +88,14 @@ data class WorkspaceData(val stats: DashboardStats, val incoming: List<Order>, v
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WorkspaceScreen(nav: NavHostController, onMenu: () -> Unit) {
+fun WorkspaceScreen(nav: NavHostController, onMenu: (() -> Unit)?) {
     val c = MedkApp.container
     val me = c.auth.profile ?: return
     val isOwner = me.roleEnum == Role.OWNER
+    val canStats = isOwner || me.canViewStats
     val vm = loadVm("workspace") {
         coroutineScope {
-            val stats = async { c.admin.stats() }
+            val stats = async { if (canStats) c.admin.stats() else DashboardStats() }
             val incoming = async {
                 c.orders.visibleOrders().filter { it.status == "open" || it.status == "paid" }
                     .filter { isOwner || it.staffId == me.id }.take(8)
@@ -107,17 +109,19 @@ fun WorkspaceScreen(nav: NavHostController, onMenu: () -> Unit) {
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        MedkTopBar(if (isOwner) "لوحة تحكم المالك" else "مساحة عمل الموظف", subtitle = me.displayName,
-            navigationIcon = { IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, "القائمة") } },
-            actions = { IconButton({ nav.toTab(Routes.HOME) }) { Icon(Icons.Filled.Storefront, "عرض المتجر") } })
+        MedkTopBar(if (isOwner) "لوحة التحكم" else "مساحة عمل البائع", subtitle = me.displayName,
+            navigationIcon = { if (onMenu != null) IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, "القائمة") } },
+            actions = {
+                if (com.medk.app.BuildConfig.ADMIN_APP) IconButton({ nav.navigate(Routes.NOTIFICATIONS) }) { Icon(Icons.Filled.Notifications, "الإشعارات") }
+                else IconButton({ nav.toTab(Routes.HOME) }) { Icon(Icons.Filled.Storefront, "عرض المتجر") }
+            })
         PullToRefreshBox(refreshing, { vm.load(silent = true) }) {
             StateView(state, { vm.load() }) { d ->
                 val s = d.stats
                 LazyVerticalGrid(GridCells.Fixed(2), contentPadding = PaddingValues(16.dp, 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item(span = { GridItemSpan(2) }) {
-                        Row(Modifier.fillMaxWidth().clip(MedkShapes.Chamfer).background(MedkColors.PrimaryGradient)
-                            .blueprintGrid(Color.White, 16f, .08f).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (canStats) item(span = { GridItemSpan(2) }) {
+                        Row(Modifier.fillMaxWidth().clip(MedkShapes.Chamfer).background(MedkColors.PrimaryGradient).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(if (isOwner) "الإيرادات المؤكدة" else "إيرادات طلباتك المؤكدة", color = Color.White.copy(.8f),
                                     style = MaterialTheme.typography.labelMedium)
@@ -129,22 +133,26 @@ fun WorkspaceScreen(nav: NavHostController, onMenu: () -> Unit) {
                             }
                         }
                     }
-                    item { StatCard("إجمالي الطلبات", "${s.totalOrders}", Icons.AutoMirrored.Filled.ReceiptLong, MedkColors.Violet) { nav.navigate(Routes.adminOrders()) } }
-                    item { StatCard("محادثات مفتوحة", "${s.openConversations}", Icons.AutoMirrored.Filled.Chat, MedkColors.Info) { nav.toTab(Routes.CONVERSATIONS) } }
-                    item { StatCard("طلبات مفتوحة", "${s.openOrders}", Icons.Filled.PendingActions, MedkColors.Warning) { nav.navigate(Routes.adminOrders("open")) } }
-                    item { StatCard("طلبات مدفوعة", "${s.paidOrders}", Icons.Filled.Paid, MedkColors.Info) { nav.navigate(Routes.adminOrders("paid")) } }
-                    item { StatCard("طلبات مُسلَّمة", "${s.deliveredOrders}", Icons.Filled.LocalShipping, MedkColors.Success) { nav.navigate(Routes.adminOrders("delivered")) } }
-                    if (isOwner) item { StatCard("غير مُسندة", "${s.unassignedOrders}", Icons.Filled.Groups, MedkColors.Danger) { nav.navigate(Routes.adminOrders()) } }
-                    else item { StatCard("طلبات مغلقة", "${s.closedOrders}", Icons.AutoMirrored.Filled.ReceiptLong, Color(0xFF8E8A99)) { nav.navigate(Routes.adminOrders("closed")) } }
+                    if (canStats) {
+                        item { StatCard("إجمالي الطلبات", "${s.totalOrders}", Icons.AutoMirrored.Filled.ReceiptLong, MedkColors.Violet) { nav.navigate(Routes.adminOrders()) } }
+                        item { StatCard("محادثات مفتوحة", "${s.openConversations}", Icons.AutoMirrored.Filled.Chat, MedkColors.Info) { nav.toTab(Routes.CONVERSATIONS) } }
+                        item { StatCard("طلبات مفتوحة", "${s.openOrders}", Icons.Filled.PendingActions, MedkColors.Warning) { nav.navigate(Routes.adminOrders("open")) } }
+                        item { StatCard("طلبات مدفوعة", "${s.paidOrders}", Icons.Filled.Paid, MedkColors.Info) { nav.navigate(Routes.adminOrders("paid")) } }
+                        item { StatCard("طلبات مُسلَّمة", "${s.deliveredOrders}", Icons.Filled.LocalShipping, MedkColors.Success) { nav.navigate(Routes.adminOrders("delivered")) } }
+                        if (isOwner) item { StatCard("غير مُسندة", "${s.unassignedOrders}", Icons.Filled.Groups, MedkColors.Danger) { nav.navigate(Routes.adminOrders()) } }
+                        else item { StatCard("طلبات مغلقة", "${s.closedOrders}", Icons.AutoMirrored.Filled.ReceiptLong, Color(0xFF8E8A99)) { nav.navigate(Routes.adminOrders("closed")) } }
+                    }
 
                     item(span = { GridItemSpan(2) }) { SectionHeader("الإدارة", index = 1) }
                     item { Tile("الطلبات", Icons.AutoMirrored.Filled.ReceiptLong) { nav.navigate(Routes.adminOrders()) } }
                     item { Tile("المحادثات", Icons.AutoMirrored.Filled.Chat) { nav.toTab(Routes.CONVERSATIONS) } }
                     if (isOwner || me.canManageProducts) item { Tile("المنتجات", Icons.Filled.Inventory2, "${s.products}") { nav.navigate(Routes.ADMIN_PRODUCTS) } }
+                    if (!isOwner && me.canManageP2p) item { Tile("أسعار P2P", Icons.Filled.CurrencyExchange) { nav.navigate(Routes.ADMIN_P2P) } }
                     if (isOwner) {
+                        item { Tile("العملاء", Icons.Filled.People) { nav.navigate(Routes.ADMIN_CUSTOMERS) } }
                         item { Tile("الأقسام الرئيسية", Icons.Filled.Category) { nav.navigate(Routes.ADMIN_CATEGORIES) } }
                         item { Tile("الأقسام الفرعية", Icons.Filled.ViewList) { nav.navigate(Routes.ADMIN_SECTIONS) } }
-                        item { Tile("الموظفون", Icons.Filled.Groups, "${s.staff}") { nav.navigate(Routes.ADMIN_STAFF) } }
+                        item { Tile("البائعون والصلاحيات", Icons.Filled.Groups, "${s.staff}") { nav.navigate(Routes.ADMIN_STAFF) } }
                         item { Tile("البانرات", Icons.Filled.ViewCarousel) { nav.navigate(Routes.ADMIN_BANNERS) } }
                         item { Tile("أسعار P2P", Icons.Filled.CurrencyExchange) { nav.navigate(Routes.ADMIN_P2P) } }
                     }
@@ -190,7 +198,7 @@ private fun Tile(label: String, icon: ImageVector, badge: String? = null, onClic
 // ============================================================ orders admin
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AdminOrdersScreen(nav: NavHostController, initialStatus: String?) {
+fun AdminOrdersScreen(nav: NavHostController, initialStatus: String?, asTab: Boolean = false) {
     val c = MedkApp.container
     val me = c.auth.profile
     var status by rememberSaveable { mutableStateOf(initialStatus) }
@@ -203,7 +211,7 @@ fun AdminOrdersScreen(nav: NavHostController, initialStatus: String?) {
     val state by vm.state.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        MedkTopBar("إدارة الطلبات", onBack = { nav.popBackStack() })
+        MedkTopBar("إدارة الطلبات", onBack = if (asTab) null else ({ nav.popBackStack() }))
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             item { Chip("الكل", status == null && !onlyUnassigned) { status = null; onlyUnassigned = false } }
             items(OrderStatus.entries) { s -> Chip(s.label, status == s.key) { status = s.key; onlyUnassigned = false } }

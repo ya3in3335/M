@@ -24,6 +24,7 @@ Deno.serve(async (req) => {
         const { data, error } = await db.from("profiles").upsert({
           id: user.uid, email, full_name: fullName || null, role: "staff", is_active: true,
           can_manage_products: !!body.can_manage_products, can_update_orders: body.can_update_orders !== false,
+          can_manage_p2p: !!body.can_manage_p2p, can_view_stats: !!body.can_view_stats,
         }).select("*").single();
         if (error) throw new HttpError(500, error.message);
         return json({ profile: data });
@@ -37,7 +38,8 @@ Deno.serve(async (req) => {
         return json({ ok: true });
       }
       case "set_active": {
-        await assertStaff(db, body.uid);
+        // staff or customers (never the owner account itself)
+        await assertNotOwner(db, body.uid);
         const active = !!body.active;
         await auth.updateUser(body.uid, { disabled: !active });
         if (!active) await auth.revokeRefreshTokens(body.uid);
@@ -49,6 +51,7 @@ Deno.serve(async (req) => {
         const role = String(body.role);
         if (!["customer", "staff"].includes(role)) throw new HttpError(400, "invalid role");
         if (body.uid === caller.uid) throw new HttpError(400, "cannot change your own role");
+        await assertNotOwner(db, body.uid);
         const { error } = await db.from("profiles").update({ role }).eq("id", body.uid);
         if (error) throw new HttpError(500, error.message);
         return json({ ok: true });
@@ -61,6 +64,12 @@ Deno.serve(async (req) => {
     return json({ error: (e as Error).message }, status);
   }
 });
+
+// deno-lint-ignore no-explicit-any
+async function assertNotOwner(db: any, uid: string) {
+  const { data } = await db.from("profiles").select("role").eq("id", uid).maybeSingle();
+  if (!data || data.role === "owner") throw new HttpError(400, "cannot change an owner account");
+}
 
 // deno-lint-ignore no-explicit-any
 async function assertStaff(db: any, uid: string) {

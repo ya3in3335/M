@@ -43,17 +43,23 @@ android {
         buildConfigField("Boolean", "DEMO", "false")
     }
 
-    // prod  = real Firebase + Supabase backend
-    // demo  = no backend at all, in-memory sample data (for trying the app)
-    flavorDimensions += "mode"
+    // Two apps from one codebase:
+    //   app  : store = customer/staff marketplace, admin = owner control panel ("MED-K Admin")
+    //   mode : prod  = real Firebase + Supabase,  demo = no backend, in-memory sample data
+    flavorDimensions += listOf("app", "mode")
     productFlavors {
+        create("store") { dimension = "app"; buildConfigField("Boolean", "ADMIN_APP", "false") }
+        create("admin") {
+            dimension = "app"
+            applicationId = "com.medk.admin"
+            buildConfigField("Boolean", "ADMIN_APP", "true")
+        }
         create("prod") { dimension = "mode" }
         create("demo") {
             dimension = "mode"
             applicationIdSuffix = ".demo"
             versionNameSuffix = "-demo"
             buildConfigField("Boolean", "DEMO", "true")
-            resValue("string", "app_name", "MED-K Demo")
         }
     }
 
@@ -109,8 +115,24 @@ android {
     }
 }
 
+// App name per variant.
+androidComponents {
+    onVariants { v ->
+        val admin = v.productFlavors.any { it.second == "admin" }
+        val demo = v.productFlavors.any { it.second == "demo" }
+        val name = (if (admin) "MED-K Admin" else "MED-K") + (if (demo) " Demo" else "")
+        v.resValues.put(v.makeResValueKey("string", "app_name"), com.android.build.api.variant.ResValue(name, null))
+    }
+}
+
 // The demo flavor has its own applicationId and never talks to Firebase.
 tasks.matching { it.name.contains("Demo") && it.name.contains("GoogleServices") }.configureEach { enabled = false }
+// The admin app needs its own Android app (com.medk.admin) in the same Firebase project.
+val googleJsonHasAdmin = hasGoogleServices && file("google-services.json").readText().contains("\"com.medk.admin\"")
+if (hasGoogleServices && !googleJsonHasAdmin) {
+    logger.warn("MED-K: google-services.json has no com.medk.admin client — MED-K Admin (prod) will show the configuration screen.")
+    tasks.matching { it.name.contains("AdminProd") && it.name.contains("GoogleServices") }.configureEach { enabled = false }
+}
 
 dependencies {
     implementation(libs.androidx.core.ktx)

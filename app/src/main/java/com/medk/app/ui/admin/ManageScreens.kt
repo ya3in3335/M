@@ -72,6 +72,7 @@ import com.medk.app.data.Profile
 import com.medk.app.data.Role
 import com.medk.app.data.Section
 import com.medk.app.data.SectionInput
+import com.medk.app.data.StaffPermissions
 import com.medk.app.ui.components.Avatar
 import com.medk.app.ui.components.EmptyBox
 import com.medk.app.ui.components.LocalToast
@@ -280,9 +281,9 @@ fun AdminStaffScreen(nav: NavHostController) {
     val action = actionVm("staff-create")
     val busy by action.busy.collectAsStateWithLifecycle()
     val toast = LocalToast.current
-    ManageScaffold("إدارة الموظفين", nav, "موظف جديد", { creating = true }) {
+    ManageScaffold("البائعون والصلاحيات", nav, "بائع جديد", { creating = true }) {
         StateView(state, { vm.load() }) { list ->
-            if (list.isEmpty()) EmptyBox(Icons.Filled.Groups, "لا يوجد موظفون")
+            if (list.isEmpty()) EmptyBox(Icons.Filled.Groups, "لا يوجد بائعون")
             else LazyColumn(contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 96.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(list, key = { it.id }) { p ->
                     MedkCard(onClick = if (p.roleEnum == Role.STAFF) ({ nav.navigate(Routes.staffDetail(p.id)) }) else null, padding = PaddingValues(12.dp)) {
@@ -292,6 +293,7 @@ fun AdminStaffScreen(nav: NavHostController) {
                             Column(Modifier.weight(1f)) {
                                 Text(p.displayName, style = MaterialTheme.typography.titleSmall)
                                 Text(p.email ?: "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (p.roleEnum == Role.STAFF) Text(permissionSummary(p), style = MaterialTheme.typography.labelSmall, color = MedkColors.Violet)
                             }
                             when {
                                 p.roleEnum == Role.OWNER -> Pill("المالك", MedkColors.Violet)
@@ -308,18 +310,16 @@ fun AdminStaffScreen(nav: NavHostController) {
         var name by remember { mutableStateOf("") }
         var email by remember { mutableStateOf("") }
         var pass by remember { mutableStateOf("") }
-        var manage by remember { mutableStateOf(false) }
-        var orders by remember { mutableStateOf(true) }
-        FormDialog("إضافة موظف", busy, name.isNotBlank() && email.contains('@') && pass.length >= 8, { creating = false }, {
-            action.run(toast, { creating = false; toast("تم إنشاء حساب الموظف"); vm.load(silent = true) }) {
-                c.admin.createStaff(name.trim(), email.trim(), pass, manage, orders)
+        var perms by remember { mutableStateOf(StaffPermissions()) }
+        FormDialog("إضافة بائع", busy, name.isNotBlank() && email.contains('@') && pass.length >= 8, { creating = false }, {
+            action.run(toast, { creating = false; toast("تم إنشاء حساب البائع"); vm.load(silent = true) }) {
+                c.admin.createStaff(name.trim(), email.trim(), pass, perms)
             }
         }) {
             MedkTextField(name, { name = it }, "الاسم الكامل", leading = Icons.Filled.Person)
             MedkTextField(email, { email = it }, "البريد الإلكتروني", leading = Icons.Filled.Email, keyboardType = KeyboardType.Email)
             MedkTextField(pass, { pass = it }, "كلمة المرور (8 أحرف على الأقل)", leading = Icons.Filled.Lock, isPassword = true)
-            SwitchRow("إدارة المنتجات", manage, { manage = it }, "ضمن الأقسام المسموحة فقط")
-            SwitchRow("تحديث حالة الطلبات", orders, { orders = it })
+            PermissionSwitches(perms) { perms = it }
         }
     }
 }
@@ -333,7 +333,8 @@ fun StaffDetailScreen(id: String, nav: NavHostController) {
             val cats = async { c.catalog.categories(force = true) }
             val secs = async { c.catalog.allSections(force = true) }
             val mine = async { c.admin.staffSections(id) }
-            StaffDetail(p.await(), cats.await(), secs.await(), mine.await())
+            val orders = async { runCatching { c.orders.visibleOrders() }.getOrDefault(emptyList()).filter { it.staffId == id } }
+            StaffDetail(p.await(), cats.await(), secs.await(), mine.await(), orders.await())
         }
     }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -341,34 +342,39 @@ fun StaffDetailScreen(id: String, nav: NavHostController) {
     val action = actionVm("staff-detail")
     val busy by action.busy.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        MedkTopBar("بيانات الموظف", onBack = { nav.popBackStack() })
+        MedkTopBar("صلاحيات البائع", onBack = { nav.popBackStack() })
         StateView(state, { vm.load() }) { d ->
-            var manage by rememberSaveable { mutableStateOf(d.profile.canManageProducts) }
-            var orders by rememberSaveable { mutableStateOf(d.profile.canUpdateOrders) }
-            val selected = remember { mutableStateListOf<String>().apply { addAll(d.sections) } }
+            var perms by remember(d.profile) { mutableStateOf(d.profile.permissions) }
+            val selected = remember(d.sections) { mutableStateListOf<String>().apply { addAll(d.sections) } }
+            val assigned = d.allSections.filter { it.assignedStaffId == id }.map { it.id }.toSet()
             var newPass by rememberSaveable { mutableStateOf("") }
             var confirmToggle by remember { mutableStateOf(false) }
+            var confirmDemote by remember { mutableStateOf(false) }
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 MedkCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(d.profile.displayName, d.profile.avatarUrl, 56.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(d.profile.displayName, style = MaterialTheme.typography.titleMedium)
-                            Text(d.profile.email ?: "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Avatar(d.profile.displayName, d.profile.avatarUrl, 52.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(d.profile.displayName, style = MaterialTheme.typography.titleMedium)
+                                Text(d.profile.email ?: "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Pill(if (d.profile.isActive) "نشط" else "موقوف", if (d.profile.isActive) MedkColors.Success else MedkColors.Danger)
                         }
-                        Pill(if (d.profile.isActive) "نشط" else "موقوف", if (d.profile.isActive) MedkColors.Success else MedkColors.Danger)
+                        HorizontalDivider(Modifier.padding(vertical = 10.dp))
+                        Row {
+                            MiniStat("طلبات مسندة", "${d.orders.size}", Modifier.weight(1f))
+                            MiniStat("مفتوحة", "${d.orders.count { it.status == "open" }}", Modifier.weight(1f))
+                            MiniStat("مسلّمة", "${d.orders.count { it.status == "delivered" || it.status == "closed" }}", Modifier.weight(1f))
+                        }
                     }
                 }
                 Text("الصلاحيات", style = MaterialTheme.typography.titleMedium)
-                MedkCard {
-                    Column {
-                        SwitchRow("إدارة المنتجات", manage, { manage = it }, "إضافة وتعديل المنتجات في الأقسام المحددة أدناه")
-                        HorizontalDivider()
-                        SwitchRow("تحديث حالة الطلبات", orders, { orders = it }, "الدفع / التسليم / الإغلاق للطلبات المسندة إليه")
-                    }
-                }
+                MedkCard { PermissionSwitches(perms) { perms = it } }
                 Text("الأقسام والألعاب المسموحة", style = MaterialTheme.typography.titleMedium)
+                Text("يرى البائع طلبات ومحادثات الأقسام المسندة إليه، ويدير منتجات الأقسام المحددة هنا.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 MedkCard(padding = PaddingValues(8.dp)) {
                     Column {
                         d.categories.forEach { cat ->
@@ -379,7 +385,8 @@ fun StaffDetailScreen(id: String, nav: NavHostController) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Checkbox(s.id in selected, { on -> if (on) selected.add(s.id) else selected.remove(s.id) },
                                             colors = CheckboxDefaults.colors(checkedColor = MedkColors.Purple))
-                                        Text(s.name, style = MaterialTheme.typography.bodyMedium)
+                                        Text(s.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                                        if (s.id in assigned) Pill("البائع المسؤول", MedkColors.Info)
                                     }
                                 }
                             }
@@ -387,31 +394,67 @@ fun StaffDetailScreen(id: String, nav: NavHostController) {
                     }
                 }
                 PrimaryButton("حفظ الصلاحيات", {
-                    action.run(toast, { toast("تم حفظ الصلاحيات") }) { c.admin.setPermissions(id, manage, orders, selected.toSet()) }
+                    action.run(toast, { toast("تم حفظ الصلاحيات"); vm.load(silent = true) }) { c.admin.setPermissions(id, perms, selected.toSet()) }
                 }, loading = busy)
-                Text("تغيير كلمة المرور", style = MaterialTheme.typography.titleMedium)
-                MedkTextField(newPass, { newPass = it }, "كلمة المرور الجديدة (8 أحرف على الأقل)", leading = Icons.Filled.Lock, isPassword = true)
+                Text("الأمان", style = MaterialTheme.typography.titleMedium)
+                MedkTextField(newPass, { newPass = it }, "كلمة مرور جديدة (8 أحرف على الأقل)", leading = Icons.Filled.Lock, isPassword = true)
                 SecondaryButton("تعيين كلمة المرور", {
-                    action.run(toast, { toast("تم تغيير كلمة المرور وتسجيل خروج الموظف من أجهزته"); newPass = "" }) { c.admin.setStaffPassword(id, newPass) }
-                }, enabled = newPass.length >= 8 && !busy, height = 40.dp)
-                Spacer(Modifier.height(4.dp))
+                    action.run(toast, { toast("تم تغيير كلمة المرور وتسجيل خروج البائع من أجهزته"); newPass = "" }) { c.admin.setStaffPassword(id, newPass) }
+                }, enabled = newPass.length >= 8 && !busy)
                 SecondaryButton(if (d.profile.isActive) "إيقاف الحساب" else "تفعيل الحساب", { confirmToggle = true },
-                    color = if (d.profile.isActive) MedkColors.Danger else MedkColors.Success, height = 40.dp, enabled = !busy)
+                    color = if (d.profile.isActive) MedkColors.Danger else MedkColors.Success, enabled = !busy)
+                SecondaryButton("إزالة صفة البائع (تحويله إلى عميل)", { confirmDemote = true }, color = MedkColors.Danger, enabled = !busy)
                 Spacer(Modifier.height(16.dp))
             }
             if (confirmToggle) AlertDialog({ confirmToggle = false },
-                title = { Text(if (d.profile.isActive) "إيقاف الموظف؟" else "تفعيل الموظف؟") },
+                title = { Text(if (d.profile.isActive) "إيقاف البائع؟" else "تفعيل البائع؟") },
                 text = { Text(if (d.profile.isActive) "لن يتمكن من تسجيل الدخول وسيتم إنهاء جلساته." else "سيتمكن من تسجيل الدخول مجدداً.") },
                 confirmButton = { TextButton({
                     confirmToggle = false
-                    action.run(toast, { toast("تم التحديث"); vm.load(silent = true) }) { c.admin.setStaffActive(id, !d.profile.isActive) }
+                    action.run(toast, { toast("تم التحديث"); vm.load(silent = true) }) { c.admin.setUserActive(id, !d.profile.isActive) }
                 }) { Text("تأكيد", color = MedkColors.Violet) } },
                 dismissButton = { TextButton({ confirmToggle = false }) { Text("إلغاء") } })
+            if (confirmDemote) AlertDialog({ confirmDemote = false },
+                title = { Text("تحويل إلى عميل؟") },
+                text = { Text("سيفقد ${d.profile.displayName} كل صلاحيات البائع. الطلبات المسندة إليه تبقى في السجل.") },
+                confirmButton = { TextButton({
+                    confirmDemote = false
+                    action.run(toast, { toast("تم التحويل إلى عميل"); nav.popBackStack() }) { c.admin.setRole(id, Role.CUSTOMER) }
+                }) { Text("تحويل", color = MedkColors.Danger) } },
+                dismissButton = { TextButton({ confirmDemote = false }) { Text("إلغاء") } })
         }
     }
 }
 
-data class StaffDetail(val profile: Profile, val categories: List<Category>, val allSections: List<Section>, val sections: Set<String>)
+@Composable
+private fun MiniStat(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, style = MaterialTheme.typography.titleLarge)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** The four seller permission switches (shared by "create" and "edit"). */
+@Composable
+fun PermissionSwitches(perms: StaffPermissions, onChange: (StaffPermissions) -> Unit) {
+    Column {
+        SwitchRow("إدارة المنتجات", perms.manageProducts, { onChange(perms.copy(manageProducts = it)) }, "إضافة وتعديل وحذف المنتجات في الأقسام المسموحة")
+        HorizontalDivider()
+        SwitchRow("تحديث حالة الطلبات", perms.updateOrders, { onChange(perms.copy(updateOrders = it)) }, "تأكيد الدفع والتسليم وإغلاق الطلبات المسندة إليه")
+        HorizontalDivider()
+        SwitchRow("إدارة أسعار P2P", perms.manageP2p, { onChange(perms.copy(manageP2p = it)) }, "تعديل أسعار شراء وبيع العملات الرقمية")
+        HorizontalDivider()
+        SwitchRow("عرض الإحصائيات والإيرادات", perms.viewStats, { onChange(perms.copy(viewStats = it)) }, "رؤية أرقام المبيعات الخاصة بطلباته")
+    }
+}
+
+fun permissionSummary(p: Profile): String = listOfNotNull(
+    "المنتجات".takeIf { p.canManageProducts }, "الطلبات".takeIf { p.canUpdateOrders },
+    "P2P".takeIf { p.canManageP2p }, "الإحصائيات".takeIf { p.canViewStats },
+).joinToString(" • ").ifEmpty { "بدون صلاحيات إضافية" }
+
+data class StaffDetail(val profile: Profile, val categories: List<Category>, val allSections: List<Section>, val sections: Set<String>,
+                       val orders: List<com.medk.app.data.Order>)
 
 // ================================================================ banners
 @Composable

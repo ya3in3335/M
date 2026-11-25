@@ -53,20 +53,20 @@ jobs:
           fi
 
       - name: Kotlin compilation
-        run: ./gradlew :app:compileProdDebugKotlin :app:compileDemoDebugKotlin --stacktrace
+        run: ./gradlew :app:compileStoreProdDebugKotlin :app:compileAdminProdDebugKotlin :app:compileStoreDemoDebugKotlin :app:compileAdminDemoDebugKotlin --stacktrace
 
       - name: Unit & screenshot tests
-        run: ./gradlew :app:testProdDebugUnitTest :app:testDemoDebugUnitTest --stacktrace
+        run: ./gradlew :app:testStoreProdDebugUnitTest :app:testStoreDemoDebugUnitTest :app:testAdminDemoDebugUnitTest --stacktrace
 
-      - name: Build debug APKs (prod + demo)
-        run: ./gradlew :app:assembleProdDebug :app:assembleDemoDebug --stacktrace
+      - name: Build debug APKs (store + admin, prod + demo)
+        run: ./gradlew :app:assembleStoreProdDebug :app:assembleStoreDemoDebug :app:assembleAdminProdDebug :app:assembleAdminDemoDebug --stacktrace
 
       - name: Build release AAB
         env:
           MEDK_KEYSTORE_PASSWORD: ${{ secrets.MEDK_KEYSTORE_PASSWORD }}
           MEDK_KEY_ALIAS: ${{ secrets.MEDK_KEY_ALIAS }}
           MEDK_KEY_PASSWORD: ${{ secrets.MEDK_KEY_PASSWORD }}
-        run: ./gradlew :app:bundleProdRelease :app:assembleProdRelease --stacktrace
+        run: ./gradlew :app:bundleStoreProdRelease :app:bundleAdminProdRelease :app:assembleStoreProdRelease --stacktrace
 
       - name: Remove secrets from workspace
         if: always()
@@ -74,23 +74,30 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MED-K-debug-apk
-          path: app/build/outputs/apk/prod/debug/*.apk
+          name: MED-K-store-apk
+          path: app/build/outputs/apk/storeProd/debug/*.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MED-K-DEMO-apk
-          path: app/build/outputs/apk/demo/debug/*.apk
+          name: MED-K-ADMIN-apk
+          path: app/build/outputs/apk/adminProd/debug/*.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MED-K-DEMO-apks
+          path: |
+            app/build/outputs/apk/storeDemo/debug/*.apk
+            app/build/outputs/apk/adminDemo/debug/*.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: MED-K-release-aab
-          path: app/build/outputs/bundle/prodRelease/*.aab
+          path: app/build/outputs/bundle/*Release/*.aab
 
       - uses: actions/upload-artifact@v4
         with:
           name: MED-K-release-apk
-          path: app/build/outputs/apk/prod/release/*.apk
+          path: app/build/outputs/apk/storeProd/release/*.apk
 
       - uses: actions/upload-artifact@v4
         if: always()

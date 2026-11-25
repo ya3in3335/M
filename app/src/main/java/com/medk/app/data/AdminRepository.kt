@@ -26,10 +26,11 @@ open class AdminRepository(private val c: AppContainer) {
     open suspend fun staff(): List<Profile> =
         db.from("profiles").select { filter { isIn("role", listOf("staff", "owner")) }; order("created_at", Order.ASCENDING) }.decodeList()
 
-    open suspend fun createStaff(name: String, email: String, password: String, manageProducts: Boolean, updateOrders: Boolean): Profile {
+    open suspend fun createStaff(name: String, email: String, password: String, perms: StaffPermissions): Profile {
         val res = c.edge.call("admin-staff", buildJsonObject {
             put("action", "create"); put("full_name", name); put("email", email); put("password", password)
-            put("can_manage_products", manageProducts); put("can_update_orders", updateOrders)
+            put("can_manage_products", perms.manageProducts); put("can_update_orders", perms.updateOrders)
+            put("can_manage_p2p", perms.manageP2p); put("can_view_stats", perms.viewStats)
         })
         return c.json.decodeFromJsonElement(res["profile"]!!.jsonObject)
     }
@@ -38,13 +39,23 @@ open class AdminRepository(private val c: AppContainer) {
         c.edge.call("admin-staff", buildJsonObject { put("action", "set_password"); put("uid", uid); put("password", password) })
     }
 
-    open suspend fun setStaffActive(uid: String, active: Boolean) {
+    /** Activates / suspends any staff or customer account (Firebase + profile). */
+    open suspend fun setUserActive(uid: String, active: Boolean) {
         c.edge.call("admin-staff", buildJsonObject { put("action", "set_active"); put("uid", uid); put("active", active) })
     }
 
-    open suspend fun setPermissions(uid: String, manageProducts: Boolean, updateOrders: Boolean, sectionIds: Set<String>) {
+    /** Promotes a customer to seller or demotes a seller to customer. */
+    open suspend fun setRole(uid: String, role: Role) {
+        c.edge.call("admin-staff", buildJsonObject { put("action", "set_role"); put("uid", uid); put("role", role.name.lowercase()) })
+    }
+
+    open suspend fun customers(): List<Profile> =
+        db.from("profiles").select { filter { eq("role", "customer") }; order("created_at", Order.DESCENDING) }.decodeList()
+
+    open suspend fun setPermissions(uid: String, perms: StaffPermissions, sectionIds: Set<String>) {
         db.from("profiles").update({
-            set("can_manage_products", manageProducts); set("can_update_orders", updateOrders)
+            set("can_manage_products", perms.manageProducts); set("can_update_orders", perms.updateOrders)
+            set("can_manage_p2p", perms.manageP2p); set("can_view_stats", perms.viewStats)
         }) { filter { eq("id", uid) } }
         db.from("staff_sections").delete { filter { eq("staff_id", uid) } }
         if (sectionIds.isNotEmpty()) db.from("staff_sections").insert(sectionIds.map { StaffSection(uid, it) })

@@ -56,7 +56,6 @@ import com.medk.app.data.Product
 import com.medk.app.ui.theme.CategoryPalette
 import com.medk.app.ui.theme.MedkColors
 import com.medk.app.ui.theme.MedkShapes
-import com.medk.app.ui.theme.blueprintGrid
 import com.medk.app.ui.theme.categoryPalette
 
 fun categoryIcon(key: String?): ImageVector = when (key) {
@@ -74,14 +73,11 @@ fun NetImage(url: String?, modifier: Modifier = Modifier, contentScale: ContentS
              placeholderIcon: ImageVector = Icons.Filled.Image, palette: CategoryPalette? = null) {
     val fallback: @Composable () -> Unit = {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .background(palette?.let { Brush.linearGradient(listOf(it.start.copy(.55f), it.end.copy(.25f))) }
+            .background(palette?.let { Brush.linearGradient(listOf(it.start.copy(.7f), it.end.copy(.5f))) }
                 ?: Brush.linearGradient(listOf(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.surfaceContainerHighest)))
-            .blueprintGrid(Color.White, 14f, .07f),
+            ,
             contentAlignment = Alignment.Center) {
-            Box(Modifier.size(42.dp).clip(MedkShapes.Emblem).background(Color.White.copy(.18f)))
-            Box(Modifier.size(38.dp).clip(MedkShapes.Emblem).background(Color.Black.copy(.35f)), contentAlignment = Alignment.Center) {
-                Icon(placeholderIcon, null, tint = Color.White.copy(alpha = .85f), modifier = Modifier.size(18.dp))
-            }
+            Icon(placeholderIcon, null, tint = Color.White.copy(alpha = .7f), modifier = Modifier.size(30.dp))
         }
     }
     if (url.isNullOrBlank()) Box(modifier) { fallback() }
@@ -89,46 +85,34 @@ fun NetImage(url: String?, modifier: Modifier = Modifier, contentScale: ContentS
         loading = { Shimmer(Modifier.fillMaxSize()) }, error = { fallback() })
 }
 
-/** Chamfered emblem for a category: outer ring + gradient core + icon. */
+/** Category icon in a coloured circle. */
 @Composable
-fun CategoryArt(key: String?, palette: CategoryPalette, size: Dp = 46.dp) {
-    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-        Box(Modifier.fillMaxSize().clip(MedkShapes.Emblem).background(palette.accent.copy(alpha = .45f)))
-        Box(Modifier.fillMaxSize(.9f).clip(MedkShapes.Emblem).background(MaterialTheme.colorScheme.background))
-        Box(Modifier.fillMaxSize(.74f).clip(MedkShapes.Emblem).background(palette.brush), contentAlignment = Alignment.Center) {
-            Icon(categoryIcon(key), null, tint = Color.White, modifier = Modifier.size(size * .32f))
-        }
+fun CategoryArt(key: String?, palette: CategoryPalette, size: Dp = 44.dp) {
+    Box(Modifier.size(size).clip(CircleShape).background(palette.brush), contentAlignment = Alignment.Center) {
+        Icon(categoryIcon(key), null, tint = Color.White, modifier = Modifier.size(size * .5f))
     }
 }
 
-/** Service card — dark technical panel tinted with the category colour. */
+/** Classic list card for a service category. */
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun CategoryCard(category: Category, onClick: () -> Unit, modifier: Modifier = Modifier, index: Int? = null) {
     val p = categoryPalette(category.colorKey ?: category.slug)
-    val shape = MedkShapes.Chamfer
+    val shape = MedkShapes.Card
     Row(
-        modifier.fillMaxWidth().height(72.dp).clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .background(Brush.horizontalGradient(listOf(p.start.copy(alpha = .22f), Color.Transparent, Color.Transparent)))
-            .border(1.dp, Brush.horizontalGradient(listOf(p.accent.copy(alpha = .65f), MaterialTheme.colorScheme.outlineVariant)), shape)
-            .clickable(onClick = onClick),
+        modifier.fillMaxWidth().clip(shape).background(MaterialTheme.colorScheme.surfaceContainer)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.width(3.dp).fillMaxHeight().background(p.brush))
-        Spacer(Modifier.width(11.dp))
         CategoryArt(category.iconKey ?: category.slug, p)
-        Spacer(Modifier.width(11.dp))
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(category.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!category.description.isNullOrBlank()) Text(category.description, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (index != null) Text(index.toString().padStart(2, '0'), style = MaterialTheme.typography.labelMedium,
-            color = p.accent.copy(alpha = .8f), modifier = Modifier.padding(horizontal = 8.dp))
-        Box(Modifier.padding(end = 12.dp).size(26.dp).clip(MedkShapes.ChamferXs).background(p.accent.copy(alpha = .16f)),
-            contentAlignment = Alignment.Center) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = p.accent, modifier = Modifier.size(18.dp))
-        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -143,23 +127,22 @@ fun ProductCard(
         Box(Modifier.fillMaxWidth().aspectRatio(1.35f)) {
             NetImage(product.cover, Modifier.fillMaxSize(), palette = palette)
             if (!product.inStock) Pill("غير متوفر", MedkColors.Danger,
-                Modifier.align(Alignment.TopStart).padding(6.dp).background(Color.Black.copy(.6f), MedkShapes.ChamferXs))
+                Modifier.align(Alignment.TopStart).padding(6.dp).background(Color.Black.copy(.6f), RoundedCornerShape(50)))
             else if (product.stock != null && product.stock <= 5) Pill("آخر ${product.stock}", MedkColors.Warning,
-                Modifier.align(Alignment.TopStart).padding(6.dp).background(Color.Black.copy(.6f), MedkShapes.ChamferXs))
+                Modifier.align(Alignment.TopStart).padding(6.dp).background(Color.Black.copy(.6f), RoundedCornerShape(50)))
             if (onFavorite != null) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(26.dp).clip(MedkShapes.Emblem)
                 .background(Color.Black.copy(alpha = .55f)).clickable(onClick = onFavorite), contentAlignment = Alignment.Center) {
                 Icon(if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "المفضلة",
                     tint = if (isFavorite) MedkColors.Violet else Color.White, modifier = Modifier.size(13.dp))
             }
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
-        Column(Modifier.padding(horizontal = 9.dp, vertical = 8.dp)) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
             Text(product.name, style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.height(36.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PriceBlock(product.priceUsd, product.priceDzd, Modifier.weight(1f))
-                if (onAdd != null && product.inStock) Box(Modifier.size(30.dp).clip(MedkShapes.ChamferXs)
-                    .background(MedkColors.PrimaryGradient).clickable(onClick = onAdd), contentAlignment = Alignment.Center) {
+                if (onAdd != null && product.inStock) Box(Modifier.size(32.dp).clip(CircleShape)
+                    .background(MedkColors.Purple).clickable(onClick = onAdd), contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.AddShoppingCart, "أضف إلى السلة", tint = Color.White, modifier = Modifier.size(15.dp))
                 }
             }
@@ -177,7 +160,7 @@ fun statusColor(s: OrderStatus): Color = when (s) {
 @Composable
 fun StatusChip(status: OrderStatus, modifier: Modifier = Modifier) = Pill(status.label, statusColor(status), modifier)
 
-/** Horizontal progress stepper with chamfered nodes: open → paid → delivered → closed. */
+/** Horizontal progress stepper with circular nodes: open → paid → delivered → closed. */
 @Composable
 fun OrderProgress(status: OrderStatus, modifier: Modifier = Modifier) {
     val steps = OrderStatus.entries

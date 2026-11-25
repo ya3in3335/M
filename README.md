@@ -6,15 +6,38 @@
 |---|---|---|---|
 | ![](app/screenshots/04_home.png) | ![](app/screenshots/02_welcome.png) | ![](app/screenshots/03_login.png) | ![](app/screenshots/06_products.png) |
 
+## 📱 تطبيقان من نفس المشروع
+| التطبيق | المعرّف | لمن |
+|---|---|---|
+| **MED-K** | `com.medk.app` | العملاء + مساحة عمل البائعين |
+| **MED-K Admin** | `com.medk.admin` | **المالك فقط** — لوحة التحكم الكاملة |
+
+**MED-K Admin** يحتوي على: لوحة الإحصائيات، الطلبات (إسناد وتغيير الحالة)، المحادثات، المنتجات، **البائعون والصلاحيات** (إنشاء بائع، إيقاف/تفعيل، تغيير كلمة المرور، تحويله إلى عميل، والأقسام المسموحة)، **العملاء** (بحث، طلباتهم، إيقاف/تفعيل، ترقية إلى بائع)، الأقسام، البانرات وأسعار P2P. أي حساب غير المالك يُرفض في هذا التطبيق.
+
+صلاحيات كل بائع (تُفرض في قاعدة البيانات عبر RLS، وليس في الواجهة فقط):
+- إدارة المنتجات (في الأقسام المسموحة فقط)
+- تحديث حالة الطلبات المسندة إليه
+- إدارة أسعار P2P
+- عرض الإحصائيات والإيرادات الخاصة بطلباته
+
+> في Firebase أضف تطبيق Android ثانياً بالمعرّف `com.medk.admin` (مع بصمات SHA) ثم نزّل `google-services.json` من جديد — الملف الواحد يحتوي التطبيقين.
+> طبّق أيضاً الترحيل الجديد `supabase/migrations/20261125000000_owner_app_permissions.sql` وأعد نشر `admin-staff`.
+
+```bash
+./gradlew assembleStoreProdDebug   # MED-K
+./gradlew assembleAdminProdDebug   # MED-K Admin
+./gradlew bundleStoreProdRelease bundleAdminProdRelease   # AAB لمتجر Google Play
+```
+
 ## 🧪 النسخة التجريبية (Demo) — بدون خادم
 للتجربة السريعة يوجد إصدار **demo** يعمل بالكامل بدون Firebase أو Supabase، ببيانات تجريبية في الذاكرة (تُعاد عند إعادة تشغيل التطبيق):
-- الدخول بضغطة واحدة كـ **عميل / موظف / مالك** من شاشة الترحيب.
+- MED-K Demo: الدخول بضغطة واحدة كـ **عميل** أو **بائع**. MED-K Admin Demo: زر **دخول كمالك**.
 - كل الشاشات تعمل: الأقسام، المنتجات، السلة (مع تقسيم الطلب حسب البائع)، المحادثات مع **رد تلقائي من البائع**، تتبع الطلبات، لوحة المالك، إدارة المنتجات والموظفين.
 - يُثبَّت بجانب النسخة الحقيقية (`com.medk.app.demo`) باسم **MED-K Demo**.
 ```bash
-./gradlew assembleDemoDebug   # app/build/outputs/apk/demo/debug/app-demo-debug.apk
+./gradlew assembleStoreDemoDebug assembleAdminDemoDebug
 ```
-أو من GitHub Actions: Artifact باسم **`MED-K-DEMO-apk`**.
+أو من GitHub Actions: Artifact باسم **`MED-K-DEMO-apks`** (يحتوي التطبيقين).
 
 ## المحتويات
 - [الميزات](#الميزات)
@@ -104,8 +127,8 @@ GOOGLE_WEB_CLIENT_ID=xxxx.apps.googleusercontent.com   # اختياري إذا �
 
 ## 4. توليد APK
 ```bash
-./gradlew assembleProdDebug
-# app/build/outputs/apk/prod/debug/app-prod-debug.apk
+./gradlew assembleStoreProdDebug
+# app/build/outputs/apk/storeProd/debug/app-store-prod-debug.apk
 ```
 أو من GitHub: **Actions → Android build → آخر تشغيل → Artifacts → `MED-K-debug-apk`**.
 
@@ -122,8 +145,8 @@ GOOGLE_WEB_CLIENT_ID=xxxx.apps.googleusercontent.com   # اختياري إذا �
    MEDK_KEY_PASSWORD=...
    ```
 3. ```bash
-   ./gradlew bundleProdRelease
-   # app/build/outputs/bundle/prodRelease/app-prod-release.aab
+   ./gradlew bundleStoreProdRelease bundleAdminProdRelease
+   # app/build/outputs/bundle/storeProdRelease/*.aab و adminProdRelease/*.aab
    ```
 4. ارفع الـ AAB إلى Google Play Console (مع تفعيل Play App Signing). أضف بصمة SHA-1 لمفتاح Play App Signing إلى Firebase.
 
@@ -147,12 +170,12 @@ GOOGLE_WEB_CLIENT_ID=xxxx.apps.googleusercontent.com   # اختياري إذا �
 | الدور | ما يمكنه فعله |
 |---|---|
 | **العميل** | التصفح، السلة، طلباته ومحادثاته فقط |
-| **الموظف** | المحادثات والطلبات المسندة إليه فقط؛ تحديث الحالة إذا مُنح `can_update_orders`؛ إدارة المنتجات في الأقسام المسموحة إذا مُنح `can_manage_products` |
-| **المالك** | كل ما سبق + إدارة الأقسام، الموظفين، الصلاحيات، الإسناد، البانرات وأسعار P2P |
+| **البائع** | المحادثات والطلبات المسندة إليه فقط، وما منحه المالك من: المنتجات، تحديث الطلبات، أسعار P2P، الإحصائيات |
+| **المالك** | عبر تطبيق MED-K Admin: كل ما سبق + البائعون وصلاحياتهم، العملاء، الأقسام، الإسناد، البانرات وأسعار P2P |
 
 تُفرض هذه القواعد في قاعدة البيانات عبر RLS والمشغّلات (triggers)، وليس في الواجهة فقط.
 
 ## لقطات الشاشة (اختبارات)
 ```bash
-./gradlew recordRoborazziProdDebug recordRoborazziDemoDebug   # يحدّث الصور في app/screenshots
+./gradlew recordRoborazziStoreProdDebug recordRoborazziStoreDemoDebug recordRoborazziAdminDemoDebug   # يحدّث الصور في app/screenshots
 ```

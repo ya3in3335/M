@@ -34,6 +34,10 @@ object Routes {
     const val STAFF_DETAIL = "admin/staff/{id}"
     const val ADMIN_BANNERS = "admin/banners"
     const val ADMIN_P2P = "admin/p2p"
+    const val ADMIN_MORE = "admin/more"
+    const val ADMIN_CUSTOMERS = "admin/customers"
+    const val CUSTOMER_DETAIL = "admin/customer/{id}"
+    fun customerDetail(id: String) = "admin/customer/$id"
 
     val tabs = listOf(HOME, CATEGORIES, CART, CONVERSATIONS, PROFILE)
 

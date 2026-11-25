@@ -1,4 +1,3 @@
 <resources>
-    <string name="app_name" translatable="false">MED-K</string>
     <string name="notif_channel">إشعارات MED-K</string>
 </resources>

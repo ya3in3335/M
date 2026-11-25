@@ -89,7 +89,6 @@ import com.medk.app.ui.navigation.Routes
 import com.medk.app.ui.navigation.toTab
 import com.medk.app.ui.openSupport
 import com.medk.app.ui.theme.MedkColors
-import com.medk.app.ui.theme.blueprintGrid
 import kotlinx.coroutines.launch
 import com.medk.app.ui.theme.MedkShapes
 
@@ -123,8 +122,7 @@ fun ProfileScreen(nav: NavHostController, onMenu: () -> Unit) {
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         MedkTopBar("حسابي", navigationIcon = { IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, "القائمة") } })
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(Modifier.fillMaxWidth().clip(MedkShapes.Chamfer).background(MedkColors.PrimaryGradient)
-                .blueprintGrid(Color.White, 16f, .08f).padding(14.dp),
+            Row(Modifier.fillMaxWidth().clip(MedkShapes.Chamfer).background(MedkColors.PrimaryGradient).padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(56.dp).clip(MedkShapes.Emblem).background(Color.White.copy(.25f)), contentAlignment = Alignment.Center) {
                     Avatar(profile.displayName, profile.avatarUrl, 50.dp)

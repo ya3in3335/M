@@ -119,7 +119,7 @@ data class ConvItem(val conv: Conversation, val other: Profile?, val order: Orde
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConversationsScreen(nav: NavHostController, onMenu: (() -> Unit)?) {
+fun ConversationsScreen(nav: NavHostController, onMenu: (() -> Unit)?, showBack: Boolean = onMenu == null) {
     val c = MedkApp.container
     val me = c.auth.profile
     val vm = loadVm("conversations") {
@@ -141,9 +141,9 @@ fun ConversationsScreen(nav: NavHostController, onMenu: (() -> Unit)?) {
     val scope = rememberCoroutineScope()
     val toast = LocalToast.current
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        MedkTopBar("محادثاتي", onBack = if (onMenu == null) ({ nav.popBackStack() }) else null,
+        MedkTopBar(if (com.medk.app.BuildConfig.ADMIN_APP) "المحادثات" else "محادثاتي", onBack = if (showBack) ({ nav.popBackStack() }) else null,
             navigationIcon = onMenu?.let { { IconButton(onClick = it) { Icon(Icons.Filled.Menu, "القائمة") } } },
-            actions = { IconButton({ openSupport(nav, scope, toast) }) { Icon(Icons.Filled.SupportAgent, "الدعم الفني") } })
+            actions = { if (!com.medk.app.BuildConfig.ADMIN_APP) IconButton({ openSupport(nav, scope, toast) }) { Icon(Icons.Filled.SupportAgent, "الدعم الفني") } })
         PullToRefreshBox(refreshing, { vm.load(silent = true) }) {
             StateView(state, { vm.load() }) { list ->
                 if (list.isEmpty()) EmptyBox(Icons.Filled.Forum, "لا توجد محادثات بعد",

@@ -92,7 +92,7 @@ private suspend fun loadAdminCatalog(): ProductAdminData {
 }
 
 @Composable
-fun AdminProductsScreen(nav: NavHostController) {
+fun AdminProductsScreen(nav: NavHostController, asTab: Boolean = false) {
     val c = MedkApp.container
     val vm = loadVm("admin-products") { loadAdminCatalog() }
     LifecycleResumeEffect(Unit) { vm.load(silent = true); onPauseOrDispose { } }
@@ -103,7 +103,7 @@ fun AdminProductsScreen(nav: NavHostController) {
     val toast = LocalToast.current
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { Box(Modifier.statusBarsPadding()) { MedkTopBar("إدارة المنتجات", onBack = { nav.popBackStack() }) } },
+        topBar = { Box(Modifier.statusBarsPadding()) { MedkTopBar("إدارة المنتجات", onBack = if (asTab) null else ({ nav.popBackStack() })) } },
         floatingActionButton = {
             ExtendedFloatingActionButton(onClick = { nav.navigate(Routes.productEdit()) }, shape = MedkShapes.ChamferSm, containerColor = MedkColors.Purple, contentColor = Color.White,
                 icon = { Icon(Icons.Filled.Add, null) }, text = { Text("منتج جديد") })

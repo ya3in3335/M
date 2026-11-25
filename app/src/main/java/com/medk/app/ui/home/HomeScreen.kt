@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -70,7 +71,6 @@ import com.medk.app.ui.components.loadVm
 import com.medk.app.ui.navigation.Routes
 import com.medk.app.ui.navigation.toTab
 import com.medk.app.ui.theme.MedkColors
-import com.medk.app.ui.theme.blueprintGrid
 import com.medk.app.ui.components.EmblemIcon
 import androidx.compose.ui.unit.sp
 import com.medk.app.ui.theme.categoryPalette
@@ -118,8 +118,8 @@ fun HomeScreen(nav: NavHostController, onMenu: () -> Unit, unread: Int) {
             }
         }
         // search bar
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth().height(40.dp).clip(MedkShapes.ChamferSm)
-            .background(MaterialTheme.colorScheme.surfaceContainer).border(1.dp, MaterialTheme.colorScheme.outlineVariant, MedkShapes.ChamferSm)
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth().height(42.dp).clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.surfaceContainer).border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
             .clickable { nav.navigate(Routes.SEARCH) }.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
@@ -176,7 +176,7 @@ internal fun BannerPager(banners: List<Banner>, onOpen: (String?) -> Unit) {
         if (count > 1) Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.Center) {
             repeat(count) { i ->
                 val sel = pager.currentPage == i
-                Box(Modifier.padding(horizontal = 2.dp).height(3.dp).width(if (sel) 22.dp else 10.dp)
+                Box(Modifier.padding(horizontal = 3.dp).size(if (sel) 8.dp else 6.dp).clip(CircleShape)
                     .background(if (sel) MedkColors.Violet else MaterialTheme.colorScheme.surfaceContainerHighest))
             }
         }
@@ -185,38 +185,29 @@ internal fun BannerPager(banners: List<Banner>, onOpen: (String?) -> Unit) {
 
 @Composable
 private fun WelcomeBanner(onBrowse: () -> Unit) {
-    val shape = MedkShapes.Chamfer
-    Box(Modifier.fillMaxWidth().height(132.dp).clip(shape)
-        .background(Brush.linearGradient(listOf(Color(0xFF1C0D38), Color(0xFF0E0A18), Color(0xFF241050))))
-        .blueprintGrid(Color.White, step = 18f, alpha = .05f)
-        .border(1.dp, Brush.horizontalGradient(listOf(MedkColors.Violet.copy(.8f), MedkColors.Purple.copy(.15f))), shape)) {
-        // geometric emblem (start side in RTL = right)
-        Box(Modifier.align(Alignment.CenterStart).padding(start = 14.dp).size(104.dp), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(104.dp).clip(MedkShapes.Emblem).background(MedkColors.Violet.copy(.18f)))
-            Box(Modifier.size(96.dp).clip(MedkShapes.Emblem).background(Color(0xFF120B22)))
-            MedkMark(62.dp)
-            listOf("gaming" to (-44 to -34), "p2p" to (46 to -30), "subscriptions" to (44 to 34), "other" to (-44 to 32)).forEach { (k, o) ->
-                Box(Modifier.offset(o.first.dp, o.second.dp)) { EmblemIcon(categoryIcon(k), categoryPalette(k).brush, 22.dp) }
+    Row(Modifier.fillMaxWidth().height(132.dp).clip(MedkShapes.Card)
+        .background(Brush.linearGradient(listOf(MedkColors.Purple, Color(0xFF4A1A99))))
+        .padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("مرحباً بك في MED-K", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+            Text("كل خدماتك الرقمية في مكان واحد", color = Color.White.copy(.85f), style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.clip(RoundedCornerShape(50)).background(Color.White).clickable(onClick = onBrowse)
+                .padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("تصفح الخدمات", color = MedkColors.Purple, style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = MedkColors.Purple, modifier = Modifier.size(14.dp))
             }
         }
-        Column(Modifier.align(Alignment.CenterEnd).padding(end = 16.dp).fillMaxWidth(.56f)) {
-            Text("MED-K // DIGITAL", color = MedkColors.Violet, style = MaterialTheme.typography.labelSmall)
-            Text("كل خدماتك الرقمية\nفي مكان واحد", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.clip(MedkShapes.ChamferXs).background(MedkColors.PrimaryGradient).clickable(onClick = onBrowse)
-                .padding(horizontal = 12.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("تصفح الخدمات", color = Color.White, style = MaterialTheme.typography.labelMedium)
-                Spacer(Modifier.width(4.dp))
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White, modifier = Modifier.size(13.dp))
-            }
+        Box(Modifier.size(92.dp).clip(CircleShape).background(Color.White.copy(.12f)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.ShoppingBag, null, tint = Color.White, modifier = Modifier.size(46.dp))
         }
     }
 }
 
 @Composable
 private fun RemoteBanner(b: Banner, onClick: () -> Unit) {
-    val shape = MedkShapes.Chamfer
-    Box(Modifier.fillMaxWidth().height(132.dp).clip(shape).clickable(onClick = onClick)) {
+    Box(Modifier.fillMaxWidth().height(132.dp).clip(MedkShapes.Card).clickable(onClick = onClick)) {
         NetImage(b.imageUrl, Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color.Transparent, Color.Black.copy(.8f)))))
         Column(Modifier.align(Alignment.CenterEnd).padding(16.dp).fillMaxWidth(.6f)) {

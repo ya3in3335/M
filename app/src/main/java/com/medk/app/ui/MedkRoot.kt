@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -52,6 +54,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -81,6 +84,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.medk.app.BuildConfig
 import com.medk.app.MedkApp
 import com.medk.app.PendingLink
 import com.medk.app.core.friendly
@@ -130,7 +134,6 @@ import com.medk.app.ui.profile.SettingsScreen
 import com.medk.app.ui.navigation.Routes
 import com.medk.app.ui.navigation.toTab
 import com.medk.app.ui.theme.MedkColors
-import com.medk.app.ui.theme.blueprintGrid
 import com.medk.app.ui.theme.MedkTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -163,6 +166,9 @@ fun MedkRoot(pendingLink: MutableStateFlow<PendingLink?>) {
                         a is AuthState.NotConfigured -> NotConfiguredScreen()
                         a is AuthState.Failed -> AuthFailedScreen(a.message, { scope.launch { c.auth.restore() } },
                             { scope.launch { c.auth.signOut(c.context) } })
+                        a is AuthState.SignedIn && BuildConfig.ADMIN_APP ->
+                            if (a.profile.roleEnum == Role.OWNER) com.medk.app.ui.admin.OwnerAppShell(a.profile, pendingLink)
+                            else com.medk.app.ui.admin.OwnerOnlyScreen(a.profile) { scope.launch { c.auth.signOut(c.context) } }
                         a is AuthState.SignedIn -> AppShell(a.profile, pendingLink)
                         else -> AuthNav()
                     }
@@ -185,7 +191,7 @@ private fun AnimatedContentTransitionScope<*>.slideOut() =
 @Composable
 private fun AuthNav() {
     val nav = rememberNavController()
-    NavHost(nav, "welcome", enterTransition = { fadeIn(tween(250)) }, exitTransition = { fadeOut(tween(200)) }) {
+    NavHost(nav, if (BuildConfig.ADMIN_APP) "login" else "welcome", enterTransition = { fadeIn(tween(250)) }, exitTransition = { fadeOut(tween(200)) }) {
         composable("welcome") { WelcomeScreen({ nav.navigate("login") }, { nav.navigate("register") }) }
         composable("login") {
             LoginScreen(onBack = { nav.popBackStack() }, onRegister = { nav.navigate("register") { popUpTo("welcome") } },
@@ -212,7 +218,8 @@ private fun AppShell(profile: Profile, pendingLink: MutableStateFlow<PendingLink
     val scope = rememberCoroutineScope()
     val toast = LocalToast.current
     val ctx = LocalContext.current
-    val isTeam = profile.roleEnum != Role.CUSTOMER
+    // In the store app only sellers get the workspace; the owner uses the separate MED-K Admin app.
+    val isTeam = profile.roleEnum == Role.STAFF
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
     val cartCount by c.cart.count.collectAsStateWithLifecycle(0)
@@ -237,8 +244,7 @@ private fun AppShell(profile: Profile, pendingLink: MutableStateFlow<PendingLink
     ModalNavigationDrawer(drawerState = drawer, drawerContent = {
         ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow, drawerShape = RoundedCornerShape(topStart = 14.dp, bottomStart = 14.dp), modifier = Modifier.width(290.dp)) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(12.dp)) {
-                Column(Modifier.fillMaxWidth().clip(MedkShapes.Chamfer).background(MedkColors.PrimaryGradient)
-                    .blueprintGrid(Color.White, 16f, .08f).padding(14.dp)) {
+                Column(Modifier.fillMaxWidth().clip(MedkShapes.Chamfer).background(MedkColors.PrimaryGradient).padding(14.dp)) {
                     Avatar(profile.displayName, profile.avatarUrl, 42.dp)
                     Spacer(Modifier.height(8.dp))
                     Text(profile.displayName, color = Color.White, style = MaterialTheme.typography.titleSmall)
@@ -280,40 +286,47 @@ private fun AppShell(profile: Profile, pendingLink: MutableStateFlow<PendingLink
                 composable(Routes.CART) { CartScreen(nav, openDrawer) }
                 composable(Routes.CONVERSATIONS) { ConversationsScreen(nav, openDrawer) }
                 composable(Routes.PROFILE) { ProfileScreen(nav, openDrawer) }
-                composable(Routes.SEARCH) { SearchScreen(nav) }
-                composable(Routes.ORDERS) { OrdersScreen(nav) }
-                composable(Routes.FAVORITES) { FavoritesScreen(nav) }
-                composable(Routes.NOTIFICATIONS) { NotificationsScreen(nav) }
-                composable(Routes.SETTINGS) { SettingsScreen(nav) }
-                composable(Routes.ACCOUNT) { AccountScreen(nav) }
-                composable(Routes.ABOUT) { AboutScreen(nav) }
-                composable(Routes.PRIVACY) { PrivacyScreen(nav) }
-                composable(Routes.CATEGORY) { CategoryScreen(it.arguments?.getString("slug").orEmpty(), nav) }
-                composable(Routes.SECTION) { SectionScreen(it.arguments?.getString("id").orEmpty(), nav) }
-                composable(Routes.PRODUCT) { ProductScreen(it.arguments?.getString("id").orEmpty(), nav) }
-                composable(Routes.CHAT) { ChatScreen(it.arguments?.getString("id").orEmpty(), nav) }
-                composable(Routes.ORDER) { OrderDetailScreen(it.arguments?.getString("id").orEmpty(), nav) }
-                composable(Routes.MEDIA, listOf(navArgument("url") { type = NavType.StringType; defaultValue = "" },
-                    navArgument("type") { type = NavType.StringType; defaultValue = "image" })) {
-                    MediaScreen(it.arguments?.getString("url").orEmpty(), it.arguments?.getString("type").orEmpty(), nav)
-                }
                 composable(Routes.WORKSPACE) { WorkspaceScreen(nav, openDrawer) }
                 composable(Routes.ADMIN_ORDERS, listOf(navArgument("status") { type = NavType.StringType; nullable = true; defaultValue = null })) {
                     AdminOrdersScreen(nav, it.arguments?.getString("status"))
                 }
                 composable(Routes.ADMIN_PRODUCTS) { AdminProductsScreen(nav) }
-                composable(Routes.PRODUCT_EDIT, listOf(navArgument("id") { type = NavType.StringType; nullable = true; defaultValue = null })) {
-                    ProductEditScreen(it.arguments?.getString("id"), nav)
-                }
-                composable(Routes.ADMIN_CATEGORIES) { AdminCategoriesScreen(nav) }
-                composable(Routes.ADMIN_SECTIONS) { AdminSectionsScreen(nav) }
-                composable(Routes.ADMIN_STAFF) { AdminStaffScreen(nav) }
-                composable(Routes.STAFF_DETAIL) { StaffDetailScreen(it.arguments?.getString("id").orEmpty(), nav) }
-                composable(Routes.ADMIN_BANNERS) { AdminBannersScreen(nav) }
-                composable(Routes.ADMIN_P2P) { AdminP2pScreen(nav) }
+                detailRoutes(nav)
             }
         }
     }
+}
+
+/** Detail screens shared by the store app and the owner app. */
+fun androidx.navigation.NavGraphBuilder.detailRoutes(nav: NavHostController) {
+    composable(Routes.SEARCH) { SearchScreen(nav) }
+    composable(Routes.ORDERS) { OrdersScreen(nav) }
+    composable(Routes.FAVORITES) { FavoritesScreen(nav) }
+    composable(Routes.NOTIFICATIONS) { NotificationsScreen(nav) }
+    composable(Routes.SETTINGS) { SettingsScreen(nav) }
+    composable(Routes.ACCOUNT) { AccountScreen(nav) }
+    composable(Routes.ABOUT) { AboutScreen(nav) }
+    composable(Routes.PRIVACY) { PrivacyScreen(nav) }
+    composable(Routes.CATEGORY) { CategoryScreen(it.arguments?.getString("slug").orEmpty(), nav) }
+    composable(Routes.SECTION) { SectionScreen(it.arguments?.getString("id").orEmpty(), nav) }
+    composable(Routes.PRODUCT) { ProductScreen(it.arguments?.getString("id").orEmpty(), nav) }
+    composable(Routes.CHAT) { ChatScreen(it.arguments?.getString("id").orEmpty(), nav) }
+    composable(Routes.ORDER) { OrderDetailScreen(it.arguments?.getString("id").orEmpty(), nav) }
+    composable(Routes.MEDIA, listOf(navArgument("url") { type = NavType.StringType; defaultValue = "" },
+        navArgument("type") { type = NavType.StringType; defaultValue = "image" })) {
+        MediaScreen(it.arguments?.getString("url").orEmpty(), it.arguments?.getString("type").orEmpty(), nav)
+    }
+    composable(Routes.PRODUCT_EDIT, listOf(navArgument("id") { type = NavType.StringType; nullable = true; defaultValue = null })) {
+        ProductEditScreen(it.arguments?.getString("id"), nav)
+    }
+    composable(Routes.ADMIN_CATEGORIES) { AdminCategoriesScreen(nav) }
+    composable(Routes.ADMIN_SECTIONS) { AdminSectionsScreen(nav) }
+    composable(Routes.ADMIN_STAFF) { AdminStaffScreen(nav) }
+    composable(Routes.STAFF_DETAIL) { StaffDetailScreen(it.arguments?.getString("id").orEmpty(), nav) }
+    composable(Routes.ADMIN_BANNERS) { AdminBannersScreen(nav) }
+    composable(Routes.ADMIN_P2P) { AdminP2pScreen(nav) }
+    composable(Routes.ADMIN_CUSTOMERS) { com.medk.app.ui.admin.AdminCustomersScreen(nav) }
+    composable(Routes.CUSTOMER_DETAIL) { com.medk.app.ui.admin.CustomerDetailScreen(it.arguments?.getString("id").orEmpty(), nav) }
 }
 
 @Composable
@@ -328,7 +341,7 @@ private fun DrawerItem(label: String, icon: ImageVector, selected: Boolean, badg
     )
 }
 
-private data class Tab(val route: String, val label: String, val icon: ImageVector, val selectedIcon: ImageVector)
+data class Tab(val route: String, val label: String, val icon: ImageVector, val selectedIcon: ImageVector)
 
 @Composable
 private fun BottomBar(current: String?, cartCount: Int, onSelect: (String) -> Unit) {
@@ -339,25 +352,30 @@ private fun BottomBar(current: String?, cartCount: Int, onSelect: (String) -> Un
         Tab(Routes.CONVERSATIONS, "محادثاتي", Icons.Outlined.ChatBubbleOutline, Icons.AutoMirrored.Filled.Chat),
         Tab(Routes.PROFILE, "حسابي", Icons.Outlined.Person, Icons.Filled.Person),
     )
-    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow).navigationBarsPadding()) {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
-        Row(Modifier.fillMaxWidth().height(56.dp)) {
-            tabs.forEach { t ->
-                val sel = current == t.route
-                Column(Modifier.weight(1f).fillMaxSize().clickable { onSelect(t.route) },
-                    horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.width(if (sel) 26.dp else 0.dp).height(2.dp).background(MedkColors.PrimaryGradient))
-                    Spacer(Modifier.height(7.dp))
-                    Box {
-                        Icon(if (sel) t.selectedIcon else t.icon, t.label,
-                            tint = if (sel) MedkColors.Violet else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(21.dp))
-                        if (t.route == Routes.CART) CountBadge(cartCount, Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-5).dp))
-                    }
-                    Spacer(Modifier.height(2.dp))
-                    Text(t.label, style = MaterialTheme.typography.labelSmall,
-                        color = if (sel) MedkColors.Violet else MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
+    ClassicNavBar(tabs, current, mapOf(Routes.CART to cartCount), onSelect)
+}
+
+/** Standard Material bottom navigation bar. */
+@Composable
+fun ClassicNavBar(tabs: List<Tab>, current: String?, badges: Map<String, Int>, onSelect: (String) -> Unit) {
+    androidx.compose.material3.NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow, tonalElevation = 0.dp,
+        modifier = Modifier.height(72.dp + androidx.compose.foundation.layout.WindowInsets.navigationBars
+            .asPaddingValues().calculateBottomPadding())) {
+        tabs.forEach { t ->
+            val sel = current == t.route
+            NavigationBarItem(
+                selected = sel, onClick = { onSelect(t.route) },
+                icon = {
+                    androidx.compose.material3.BadgedBox(badge = {
+                        val n = badges[t.route] ?: 0
+                        if (n > 0) androidx.compose.material3.Badge { Text(if (n > 9) "9+" else "$n") }
+                    }) { Icon(if (sel) t.selectedIcon else t.icon, t.label, Modifier.size(22.dp)) }
+                },
+                label = { Text(t.label, style = MaterialTheme.typography.labelSmall) },
+                colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                    selectedIconColor = MedkColors.Violet, selectedTextColor = MedkColors.Violet,
+                    indicatorColor = MedkColors.Purple.copy(alpha = .18f)),
+            )
         }
     }
 }

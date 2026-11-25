@@ -47,7 +47,7 @@ class DemoFlowTest {
     @Test fun customerAndOwnerFlow() {
         rule.setContent { MedkRoot(MutableStateFlow(null)) }
         waitText("نسخة تجريبية"); shot("01_welcome")
-        rule.onNodeWithText("عميل").performClick()
+        rule.onNodeWithText("دخول كعميل").performClick()
         waitText("خدماتنا الرئيسية"); shot("02_home")
 
         rule.onNodeWithText("شحن الألعاب").performClick()
@@ -83,7 +83,7 @@ class DemoFlowTest {
     @Test fun moreCustomerScreens() {
         rule.setContent { MedkRoot(MutableStateFlow(null)) }
         waitText("نسخة تجريبية")
-        rule.onNodeWithText("عميل").performClick()
+        rule.onNodeWithText("دخول كعميل").performClick()
         waitText("خدماتنا الرئيسية")
         rule.onAllNodesWithText("الأقسام").onFirst().performClick()
         waitText("أقسام فرعية"); shot("11_categories")
@@ -99,13 +99,10 @@ class DemoFlowTest {
         waitText("حالة التسليم"); shot("14_order")
     }
 
-    @Test fun ownerDashboard() {
+    @Test fun staffWorkspace() {
         rule.setContent { MedkRoot(MutableStateFlow(null)) }
         waitText("نسخة تجريبية")
-        rule.onNodeWithText("مالك").performClick()
-        waitText("لوحة تحكم المالك"); waitText("إجمالي الطلبات"); shot("09_owner")
-        rule.onAllNodes(hasScrollAction()).let { n -> (0 until n.fetchSemanticsNodes().size).forEach { i -> runCatching { n[i].performScrollToNode(hasText("الموظفون")) } } }
-        rule.onNodeWithText("الموظفون").performClick()
-        waitText("أمين"); shot("10_staff")
+        rule.onNodeWithText("دخول كبائع").performClick()
+        waitText("مساحة عمل البائع"); waitText("الطلبات الواردة"); shot("09_staff_workspace")
     }
 }
