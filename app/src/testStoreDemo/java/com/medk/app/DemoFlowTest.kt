@@ -36,6 +36,8 @@ import org.robolectric.annotation.LooperMode
 class DemoFlowTest {
     @get:Rule val rule = createComposeRule()
 
+    @org.junit.Before fun noGates() { com.medk.app.core.AppFlags.strictNetwork = false; com.medk.app.core.AppFlags.updateChecks = false }
+
     private fun waitText(t: String, ms: Long = 8000) = try {
         rule.waitUntil(ms) {
             shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(200))

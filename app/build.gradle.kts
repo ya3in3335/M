@@ -40,6 +40,8 @@ android {
         buildConfigField("Boolean", "HAS_GOOGLE_SERVICES", hasGoogleServices.toString())
         resourceConfigurations += listOf("ar", "en")
         buildConfigField("Boolean", "DEMO", "false")
+        // In-app updates are published as GitHub Releases of this repository.
+        buildConfigField("String", "UPDATE_REPO", "\"ya3in3335/M\"")
     }
 
     // Two apps from one codebase:
@@ -63,6 +65,14 @@ android {
     }
 
     signingConfigs {
+        // Shared debug/test signing key (not secret) so that every build — local or CI —
+        // can be installed as an update over the previous one.
+        getByName("debug") {
+            storeFile = file("keys/medk-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         create("release") {
             val ks = System.getenv("MEDK_KEYSTORE_PATH") ?: secrets.getProperty("MEDK_KEYSTORE_PATH")
             if (ks != null && file(ks).exists()) {
@@ -121,6 +131,9 @@ androidComponents {
         val demo = v.productFlavors.any { it.second == "demo" }
         val name = (if (admin) "MED-K Admin" else "MED-K") + (if (demo) " Demo" else "")
         v.resValues.put(v.makeResValueKey("string", "app_name"), com.android.build.api.variant.ResValue(name, null))
+        // Release asset this variant updates itself from (e.g. MED-K-Admin-Demo.apk).
+        val asset = name.replace(" ", "-") + ".apk"
+        v.buildConfigFields.put("UPDATE_ASSET", com.android.build.api.variant.BuildConfigField("String", "\"$asset\"", null))
     }
 }
 

@@ -55,11 +55,14 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # publish the GitHub Release used by in-app updates
     timeout-minutes: 45
     env:
       # Public client configuration only (GitHub Secrets).
       GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
       VERSION_CODE: ${{ github.run_number }}
+      VERSION_NAME: 1.0.${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
 
@@ -138,6 +141,30 @@ jobs:
         with:
           name: MED-K-release-apk
           path: app/build/outputs/apk/storeProd/release/*.apk
+
+      # In-app updates: every push publishes a Release "v1.0.<run>" whose asset names
+      # match BuildConfig.UPDATE_ASSET of each variant. All builds share app/keys/medk-debug.keystore,
+      # so each APK installs as an update over the previous one.
+      - name: Prepare release assets
+        if: github.event_name == 'push'
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/storeProd/debug/*.apk dist/MED-K.apk
+          cp app/build/outputs/apk/adminProd/debug/*.apk dist/MED-K-Admin.apk
+          cp app/build/outputs/apk/storeDemo/debug/*.apk dist/MED-K-Demo.apk
+          cp app/build/outputs/apk/adminDemo/debug/*.apk dist/MED-K-Admin-Demo.apk
+
+      - name: Publish release (in-app update source)
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: MED-K 1.0.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            MED-K 1.0.${{ github.run_number }}
+            ${{ github.event.head_commit.message }}
+          files: dist/*.apk
 
       - uses: actions/upload-artifact@v4
         if: always()

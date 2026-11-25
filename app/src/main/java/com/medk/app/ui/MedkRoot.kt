@@ -173,6 +173,10 @@ fun MedkRoot(pendingLink: MutableStateFlow<PendingLink?>) {
                         else -> AuthNav()
                     }
                 }
+                // Strict online mode + daily in-app updates.
+                val online by c.network.online.collectAsStateWithLifecycle()
+                com.medk.app.ui.system.UpdatePrompt()
+                if (com.medk.app.core.AppFlags.strictNetwork && !online) com.medk.app.ui.system.OfflineScreen { c.network.refresh() }
                 SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 64.dp)) { d ->
                     androidx.compose.material3.Snackbar(d, shape = MedkShapes.ChamferSm, containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                         contentColor = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(horizontal = 12.dp)

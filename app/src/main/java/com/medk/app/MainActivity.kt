@@ -23,6 +23,12 @@ class MainActivity : ComponentActivity() {
         setContent { MedkRoot(pendingLink) }
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Daily update check (runs at most once every 24 h).
+        MedkApp.container.updates.checkIfDue()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handle(intent)

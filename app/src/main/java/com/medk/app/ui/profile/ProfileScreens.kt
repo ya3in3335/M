@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SupportAgent
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -186,6 +187,18 @@ fun SettingsScreen(nav: NavHostController) {
                 MenuRow(Icons.Filled.Notifications, "إشعارات الرسائل والطلبات", trailing = {
                     Switch(notif, { v -> scope.launch { c.settings.setNotifications(v) } }, colors = switchColors)
                 }, onClick = { scope.launch { c.settings.setNotifications(!notif) } })
+            }
+            Text("التحديثات", style = MaterialTheme.typography.titleMedium)
+            val upd = c.updates
+            val pending by upd.update.collectAsStateWithLifecycle()
+            val checking by upd.checking.collectAsStateWithLifecycle()
+            MedkCard(padding = PaddingValues(8.dp)) {
+                MenuRow(Icons.Filled.SystemUpdate, when {
+                    checking -> "جارٍ البحث عن تحديث…"
+                    pending != null -> "تحديث متوفر: ${pending!!.versionName}"
+                    else -> "الإصدار ${BuildConfig.VERSION_NAME} — البحث عن تحديث"
+                }, trailing = if (pending != null) { { Text("تحديث", color = MedkColors.Violet, style = MaterialTheme.typography.labelLarge) } } else null,
+                    onClick = { if (pending != null) upd.startDownload() else upd.checkIfDue(force = true) })
             }
             Text("الحساب", style = MaterialTheme.typography.titleMedium)
             MedkCard(padding = PaddingValues(8.dp)) {

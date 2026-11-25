@@ -60,6 +60,12 @@ class ScreenshotTest {
     @Test fun welcome() = shot("02_welcome") { WelcomeScreen({}, {}) }
     @Test fun login() = shot("03_login") { LoginScreen({}, {}, {}) }
 
+    @Test fun offline() = shot("08_offline") { com.medk.app.ui.system.OfflineScreen {} }
+    @Test fun updateDialog() = shot("09_update") {
+        com.medk.app.ui.system.UpdateDialog(com.medk.app.core.AppUpdate(12, "1.0.12", "https://x", "تحسينات في السرعة وإصلاحات."),
+            com.medk.app.core.DownloadState.Downloading(42), {}, {})
+    }
+
     @Test fun home() = shot("04_home") {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             MedkWordmark(subtitle = true, modifier = Modifier.padding(bottom = 4.dp).fillMaxWidthCompat())

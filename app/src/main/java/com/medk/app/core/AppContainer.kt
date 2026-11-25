@@ -44,6 +44,8 @@ class AppContainer(val context: Context) {
     val functions: FirebaseFunctions by lazy { FirebaseFunctions.getInstance(BuildConfig.FUNCTIONS_REGION) }
 
     val settings by lazy { SettingsRepository(context) }
+    val network by lazy { NetworkMonitor(context) }
+    val updates by lazy { UpdateManager(context, json, appScope) }
     val cloud by lazy { CloudFunctions(this) }
     val auth: AuthRepository by lazy { if (isDemo) DemoAuthRepository(this) else AuthRepository(this) }
     val catalog: CatalogRepository by lazy { if (isDemo) DemoCatalogRepository(this) else CatalogRepository(this) }
