@@ -78,20 +78,28 @@ fun UpdatePrompt() {
     val u = MedkApp.container.updates
     val update by u.update.collectAsStateWithLifecycle()
     val download by u.download.collectAsStateWithLifecycle()
-    var dialogDismissed by rememberSaveable { mutableStateOf(false) }
+    // "Later" only hides the dialog for a short while: it comes back every 2 minutes and every time the app is reopened,
+    // and the red banner stays on screen until the app is updated.
+    var dialogDismissed by remember { mutableStateOf(false) }
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) { dialogDismissed = false; onPauseOrDispose { } }
+    LaunchedEffect(dialogDismissed) { if (dialogDismissed) { kotlinx.coroutines.delay(120_000); dialogDismissed = false } }
     val up = update ?: return
 
     if (up.required || !dialogDismissed) UpdateDialog(up, download, onUpdate = { action(up, download) },
         onLater = if (up.required) null else ({ dialogDismissed = true }))
     else Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 6.dp)
-        .clip(RoundedCornerShape(12.dp)).background(MedkColors.Purple).clickable { dialogDismissed = false }
-        .padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Filled.SystemUpdate, null, tint = Color.White, modifier = Modifier.size(18.dp))
+        .clip(RoundedCornerShape(12.dp)).background(MedkColors.Danger).clickable { action(up, download) }
+        .padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Filled.SystemUpdate, null, tint = Color.White, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
-        Text("تحديث جديد متوفر (${up.versionName})", color = Color.White, style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.weight(1f))
-        Text("تحديث", color = MedkColors.Purple, style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.White).padding(horizontal = 12.dp, vertical = 4.dp))
+        Column(Modifier.weight(1f)) {
+            Text("نسختك قديمة — حدّث التطبيق الآن", color = Color.White, style = MaterialTheme.typography.labelLarge)
+            Text(when (val d = download) { is DownloadState.Downloading -> "جارٍ التنزيل… ${d.percent}%"
+                is DownloadState.Ready -> "التحديث جاهز، اضغط للتثبيت"; else -> "الإصدار ${up.versionName} متوفر" },
+                color = Color.White.copy(.85f), style = MaterialTheme.typography.labelSmall)
+        }
+        Text("تحديث", color = MedkColors.Danger, style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.White).padding(horizontal = 14.dp, vertical = 6.dp))
     }
 }
 

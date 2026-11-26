@@ -63,7 +63,7 @@ class UpdateManager(private val context: Context, private val json: Json, privat
     private val _checking = MutableStateFlow(false)
     val checking: StateFlow<Boolean> = _checking.asStateFlow()
 
-    /** Checks at most once every 24 h unless [force]; re-exposes a previously found update. */
+    /** Checks at most once every 30 min (each app start) unless [force]; re-exposes a previously found update. */
     fun checkIfDue(force: Boolean = false) {
         if (!AppFlags.updateChecks) return
         scope.launch {
@@ -74,7 +74,7 @@ class UpdateManager(private val context: Context, private val json: Json, privat
                         ?.takeIf { it.versionCode > BuildConfig.VERSION_CODE }?.let { _update.value = it }
                 }
                 val last = prefs[lastCheckKey] ?: 0L
-                if (!force && System.currentTimeMillis() - last < 24L * 3600 * 1000) return@withLock
+                if (!force && System.currentTimeMillis() - last < 30L * 60 * 1000) return@withLock
                 _checking.value = true
                 val found = runCatching { fetchLatest() }.getOrNull()
                 _checking.value = false

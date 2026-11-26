@@ -23,7 +23,7 @@ say "1/6 مفتاح Cloudflare"
 echo "الصق المفتاح ثم اضغط Enter (لن يظهر على الشاشة):"
 read -rs CF_TOKEN; echo
 [ -n "$CF_TOKEN" ] || die "لم يتم لصق المفتاح."
-CF() { curl -fsS -H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json" "$@"; }
+CF() { curl -fsS --retry 6 --retry-delay 5 --retry-all-errors -H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json" "$@"; }
 CF https://api.cloudflare.com/client/v4/user/tokens/verify >/dev/null \
   || die "المفتاح غير صالح. أنشئه من: dash.cloudflare.com/profile/api-tokens ← Create Token ← Edit Cloudflare Workers"
 ACC=$(CF https://api.cloudflare.com/client/v4/accounts | python3 -c 'import json,sys; r=json.load(sys.stdin)["result"]; print(r[0]["id"] if r else "")')
