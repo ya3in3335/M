@@ -15,12 +15,12 @@ function idToken(sub, o = {}) {
   const s = createSign("RSA-SHA256").update(`${h}.${p}`).sign(idKeys.privateKey);
   return `${h}.${p}.${b64u(s)}`;
 }
-const env = { NOWPAY_API_KEY: "NPKEY", PROJECT_ID: P, SA_KEY: JSON.stringify({ client_email: "push@x", private_key: saKeys.privateKey.export({ type: "pkcs8", format: "pem" }) }) };
+const env = { BREVO_API_KEY: "BK", MAIL_FROM: "no-reply@medk.app", NOWPAY_API_KEY: "NPKEY", PROJECT_ID: P, SA_KEY: JSON.stringify({ client_email: "push@x", private_key: saKeys.privateKey.export({ type: "pkcs8", format: "pem" }) }) };
 
 const iso = (ms = 0) => new Date(Date.now() + ms).toISOString();
 let db, sent, deleted;
 function reset() {
-  sent = []; deleted = []; ut = {}; payments = {}; invoices = []; commitFail = 0;
+  sent = []; deleted = []; ut = {}; mails = []; verifiedUsers = []; payments = {}; invoices = []; commitFail = 0;
   db = {
     "users/own": { role: "owner", active: true }, "users/cust": { role: "customer" }, "users/st1": { role: "staff" },
     "orders/o1": { reference: "MK-1", customerId: "cust", staffId: "st1", status: "paid", totalUsd: 3, items: [{ productName: "Diamonds" }], createdAt: iso(), updatedAt: iso() },
@@ -45,7 +45,7 @@ const docOut = (path) => ({ name: `projects/${P}/databases/(default)/documents/$
 const dec = (v) => "stringValue" in v ? v.stringValue : "integerValue" in v ? Number(v.integerValue) : "doubleValue" in v ? v.doubleValue
   : "booleanValue" in v ? v.booleanValue : "nullValue" in v ? null : "arrayValue" in v ? (v.arrayValue.values || []).map(dec)
   : Object.fromEntries(Object.entries(v.mapValue.fields || {}).map(([k, x]) => [k, dec(x)]));
-let payments = {}, invoices = [], commitFail = 0;
+let payments = {}, invoices = [], commitFail = 0, mails = [], verifiedUsers = [];
 
 globalThis.fetch = async (url, init = {}) => {
   url = String(url);
@@ -58,6 +58,8 @@ globalThis.fetch = async (url, init = {}) => {
     if (url.includes("/min-amount")) return ok({ min_amount: 10.3, fiat_equivalent: 10.31 });
     const pid = url.split("/payment/")[1]; return payments[pid] ? ok(payments[pid]) : new Response("{}", { status: 404 });
   }
+  if (url === "https://api.brevo.com/v3/smtp/email") { mails.push(JSON.parse(init.body)); return ok({ messageId: "m" }); }
+  if (url.includes("identitytoolkit.googleapis.com")) { verifiedUsers.push(JSON.parse(init.body)); return ok({}); }
   if (url.includes("fcm.googleapis.com")) {
     const m = JSON.parse(init.body).message;
     if (m.token === "TOK_DEAD") return new Response('{"error":{"status":"NOT_FOUND","details":[{"errorCode":"UNREGISTERED"}]}}', { status: 404 });
@@ -84,7 +86,7 @@ globalThis.fetch = async (url, init = {}) => {
       const fields = Object.fromEntries(Object.entries(w.update.fields || {}).map(([k, v]) => [k, dec(v)]));
       db[path] = w.updateMask ? { ...(db[path] || {}), ...Object.fromEntries(w.updateMask.fieldPaths.map((f) => [f, fields[f]])) } : fields;
       for (const t of w.updateTransforms || []) {
-        if (t.increment) db[path][t.fieldPath] = Math.round(((db[path][t.fieldPath] || 0) + t.increment.doubleValue) * 100) / 100;
+        if (t.increment) db[path][t.fieldPath] = Math.round(((db[path][t.fieldPath] || 0) + Number(t.increment.doubleValue ?? t.increment.integerValue)) * 100) / 100;
         else db[path][t.fieldPath] = new Date().toISOString();
       }
       touch(path);
@@ -168,5 +170,46 @@ await t("payment endpoints are gone", async () => {
   for (const p of ["/pay", "/ipn", "/withdraw", "/withdrawal", "/paycheck"]) {
     const r = await worker.fetch(new Request("https://w" + p, { method: "POST", body: "{}" }), env, {}); assert.equal(r.status, 404);
   }
+});
+// ------------------------------------------------------------------ e-mail code (OTP)
+const otp = (path, body = {}, claims = {}) => call("newu", body, idToken("newu", { email: "new@user.dev", email_verified: false, ...claims }), path);
+const codeFromMail = () => mails.at(-1).subject.match(/(\d{6})/)[1];
+await t("sends a 6-digit code to the token's own e-mail, stored hashed", async () => {
+  const r = await otp("/otp/send", { email: "victim@evil.dev" });
+  assert.equal(r.sent, true); assert.equal(mails[0].to[0].email, "new@user.dev"); assert.match(mails[0].subject, /\d{6}/);
+  assert.equal(mails[0].sender.email, "no-reply@medk.app");
+  assert.ok(db["emailOtps/newu"].hash && !JSON.stringify(db["emailOtps/newu"]).includes(codeFromMail()));
+});
+await t("right code → Firebase account marked verified, code deleted", async () => {
+  await otp("/otp/send"); const r = await otp("/otp/verify", { code: codeFromMail() });
+  assert.equal(r.verified, true); assert.deepEqual(verifiedUsers[0], { localId: "newu", emailVerified: true });
+  assert.equal(db["emailOtps/newu"], undefined);
+});
+await t("wrong codes are counted and lock after 5 attempts", async () => {
+  await otp("/otp/send"); const good = codeFromMail(); const bad = good === "000000" ? "111111" : "000000";
+  for (let i = 0; i < 5; i++) assert.equal((await otp("/otp/verify", { code: bad })).error, "otp_invalid");
+  assert.equal((await otp("/otp/verify", { code: good })).error, "otp_locked"); assert.equal(verifiedUsers.length, 0);
+});
+await t("expired codes and malformed input refused", async () => {
+  await otp("/otp/send"); db["emailOtps/newu"].expiresAt = iso(-1000);
+  assert.equal((await otp("/otp/verify", { code: codeFromMail() })).error, "otp_expired");
+  assert.equal((await otp("/otp/verify", { code: "12ab" })).error, "otp_invalid");
+});
+await t("resend cooldown and hourly limit", async () => {
+  await otp("/otp/send"); assert.equal((await otp("/otp/send")).error, "otp_wait");
+  db["emailOtps/newu"].sentAt = iso(-60_000); db["emailOtps/newu"].sends = 6;
+  assert.equal((await otp("/otp/send")).error, "otp_too_many");
+});
+await t("someone else's code is useless; already-verified accounts skip; no token → 401", async () => {
+  await otp("/otp/send"); const c = codeFromMail();
+  const other = await call("other", { code: c }, idToken("other", { email: "new@user.dev", email_verified: false }), "/otp/verify");
+  assert.equal(other.error, "otp_expired");
+  assert.equal((await otp("/otp/send", {}, { email_verified: true })).verified, true);
+  assert.equal((await call("x", {}, "bad", "/otp/send")).status, 401);
+});
+await t("not configured → clear error (app falls back to the e-mail link)", async () => {
+  const r = await worker.fetch(new Request("https://w/otp/send", { method: "POST", headers: { authorization: `Bearer ${idToken("newu", { email: "a@b.c" })}` } }),
+    { ...env, BREVO_API_KEY: undefined }, {});
+  assert.equal((await r.json()).error, "otp_not_configured");
 });
 console.log(`\n  ${n} passing`);

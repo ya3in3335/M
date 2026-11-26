@@ -194,8 +194,7 @@ open class AuthRepository(private val c: AppContainer) {
         val auth = c.firebaseAuth ?: error("Firebase not configured")
         val result = auth.createUserWithEmailAndPassword(email.trim(), password).await()
         result.user?.updateProfile(userProfileChangeRequest { displayName = name.trim() })?.await()
-        runCatching { result.user?.sendEmailVerification()?.await() }
-        finishSignIn(name.trim())
+        finishSignIn(name.trim())   // → VerifyEmail screen, which e-mails the 6-digit code
     }
 
     open suspend fun sendPasswordReset(email: String) {
@@ -258,6 +257,24 @@ open class AuthRepository(private val c: AppContainer) {
 
     open suspend fun resendVerification() {
         c.firebaseAuth?.currentUser?.sendEmailVerification()?.await() ?: error("not signed in")
+    }
+
+    /**
+     * E-mails a 6-digit code (MED-K server). Returns true in code mode; false when the server has no mail service,
+     * in which case the classic Firebase confirmation link is sent instead.
+     */
+    open suspend fun sendEmailCode(): Boolean = try {
+        c.push.post("/otp/send", org.json.JSONObject()); true
+    } catch (e: Exception) {
+        val m = e.message.orEmpty()
+        if (m.contains("otp_not_configured") || m.contains("server_not_configured") || m.contains("not_found")) { resendVerification(); false }
+        else throw e
+    }
+
+    /** Checks the typed code on the server, which marks the account verified; then enters the app. */
+    open suspend fun confirmEmailCode(code: String) {
+        c.push.post("/otp/verify", org.json.JSONObject().put("code", code.trim()))
+        if (!checkEmailVerified()) error("otp_invalid")
     }
 
     private suspend fun finishSignIn(name: String?) {

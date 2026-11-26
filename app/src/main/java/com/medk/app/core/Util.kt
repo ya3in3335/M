@@ -45,6 +45,13 @@ fun Throwable.friendly(): String {
             m.contains("forbidden") || m.contains("owner only") ->
             "ليست لديك صلاحية لتنفيذ هذا الإجراء."
         m.contains("unauthenticated") || m.contains("401") -> "انتهت الجلسة، يرجى تسجيل الدخول مجدداً."
+        m.contains("not signed in") -> "انتهت الجلسة، يرجى تسجيل الدخول مجدداً."
+        m.contains("otp_invalid") -> "الرمز غير صحيح. تحقق منه وأعد المحاولة."
+        m.contains("otp_expired") -> "انتهت صلاحية الرمز. اضغط «إرسال رمز جديد»."
+        m.contains("otp_locked") -> "محاولات خاطئة كثيرة. اطلب رمزاً جديداً."
+        m.contains("otp_wait") -> "انتظر دقيقة قبل طلب رمز جديد."
+        m.contains("otp_too_many") -> "طلبت رموزاً كثيرة. حاول بعد ساعة."
+        m.contains("mail_") -> "تعذر إرسال البريد الآن. حاول بعد قليل."
         m.contains("bad_email") -> "البريد الإلكتروني غير صحيح."
         m.contains("commission_range") -> "النسبة يجب أن تكون بين 0 و 50%."
         m.contains("requires an index") || m.contains("index is currently building") ->
