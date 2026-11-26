@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -191,6 +192,32 @@ fun OrderDetailScreen(id: String, nav: NavHostController) {
                                 Text(usd(o.totalUsd), style = MaterialTheme.typography.titleLarge, color = MedkColors.Violet)
                                 Text(dzd(o.totalDzd), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
+                        }
+                    }
+                }
+                // ---- in-app USDT payment
+                val pay = o.payment
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                if (pay != null || (!isTeam && st == OrderStatus.OPEN && c.payments.available)) MedkCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("الدفع داخل التطبيق (USDT)", style = MaterialTheme.typography.titleSmall)
+                        if (pay != null) InfoRow("حالة الدفع", pay.label,
+                            valueColor = if (pay.isFinished) MedkColors.Success else MedkColors.Warning)
+                        if (pay?.isFinished == true && isTeam) {
+                            InfoRow("المبلغ المدفوع", usd(pay.paidUsd ?: 0.0))
+                            InfoRow("رسوم البوابة", usd(pay.feeUsd ?: 0.0))
+                            InfoRow("عمولة التطبيق${pay.commissionPct?.let { " (${"%.1f".format(java.util.Locale.US, it)}%)" } ?: ""}", usd(pay.commissionUsd ?: 0.0))
+                            InfoRow("حصة البائع", usd(pay.sellerUsd ?: 0.0), valueColor = MedkColors.Success)
+                        }
+                        if (!isTeam && st == OrderStatus.OPEN && pay?.isFinished != true) {
+                            Text("ادفع ${usd(o.totalUsd)} بعملة USDT (شبكة TRC20). تتأكد العملية تلقائياً خلال دقائق.",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            PrimaryButton(if (pay == null) "ادفع الآن بـ USDT" else "متابعة الدفع", {
+                                action.run(toast) {
+                                    val url = c.payments.invoiceUrl(o.id)
+                                    ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                                }
+                            }, loading = busy, icon = Icons.Filled.Paid)
                         }
                     }
                 }

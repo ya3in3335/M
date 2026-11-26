@@ -86,5 +86,27 @@ open class PushRepository(private val c: AppContainer) {
         }
     }
 
+    /** Authenticated call to the MED-K server (payments, withdrawals). Throws with the server's error code. */
+    open suspend fun post(path: String, body: JSONObject): JSONObject {
+        if (!enabled) error("payments_not_configured")
+        val base = serverUrl ?: c.firestore.document("config/push").get().await().getString("url")?.trimEnd('/')?.also { serverUrl = it }
+            ?: error("payments_not_configured")
+        val idToken = c.firebaseAuth?.currentUser?.getIdToken(false)?.await()?.token ?: error("unauthenticated")
+        return withContext(Dispatchers.IO) {
+            val conn = URL("$base$path").openConnection() as HttpURLConnection
+            try {
+                conn.requestMethod = "POST"; conn.connectTimeout = 15_000; conn.readTimeout = 30_000; conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.setRequestProperty("Authorization", "Bearer $idToken")
+                conn.outputStream.use { it.write(body.toString().toByteArray()) }
+                val code = conn.responseCode
+                val text = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
+                val j = runCatching { JSONObject(text) }.getOrElse { JSONObject() }
+                if (code !in 200..299) error(j.optString("error").ifBlank { "http_$code" })
+                j
+            } finally { conn.disconnect() }
+        }
+    }
+
     companion object { private const val TAG = "MedkPush" }
 }

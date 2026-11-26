@@ -340,6 +340,8 @@ fun androidx.navigation.NavGraphBuilder.detailRoutes(nav: NavHostController) {
     composable(Routes.STAFF_DETAIL) { StaffDetailScreen(it.arguments?.getString("id").orEmpty(), nav) }
     composable(Routes.ADMIN_BANNERS) { AdminBannersScreen(nav) }
     composable(Routes.ADMIN_P2P) { AdminP2pScreen(nav) }
+    composable(Routes.WALLET) { com.medk.app.ui.payments.WalletScreen(nav) }
+    composable(Routes.ADMIN_PAYMENTS) { com.medk.app.ui.payments.AdminPaymentsScreen(nav) }
     composable(Routes.ADMIN_CUSTOMERS) { com.medk.app.ui.admin.AdminCustomersScreen(nav) }
     composable(Routes.CUSTOMER_DETAIL) { com.medk.app.ui.admin.CustomerDetailScreen(it.arguments?.getString("id").orEmpty(), nav) }
 }

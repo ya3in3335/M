@@ -86,6 +86,11 @@ fun DocumentSnapshot.toOrder(): Order {
         sectionId = getString("sectionId"), status = getString("status") ?: "open", totalUsd = num("totalUsd"), totalDzd = num("totalDzd"),
         note = getString("note"), createdAt = ts("createdAt") ?: "", updatedAt = ts("updatedAt"), paidAt = ts("paidAt"),
         deliveredAt = ts("deliveredAt"), closedAt = ts("closedAt"), items = items,
+        payment = (get("payment") as? Map<String, Any?>)?.let { p ->
+            fun d(k: String) = (p[k] as? Number)?.toDouble()
+            PaymentInfo(status = p["status"] as? String ?: "waiting", invoiceUrl = p["invoiceUrl"] as? String, amountUsd = d("amountUsd") ?: 0.0,
+                paidUsd = d("paidUsd"), feeUsd = d("feeUsd"), commissionUsd = d("commissionUsd"), commissionPct = d("commissionPct"), sellerUsd = d("sellerUsd"))
+        },
     )
 }
 

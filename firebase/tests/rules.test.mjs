@@ -235,6 +235,53 @@ describe("security rules (free plan)", () => {
     });
   });
 
+  describe("payments & wallets", () => {
+    beforeEach(async () => {
+      await env.withSecurityRulesDisabled(async (c) => {
+        const db = c.firestore();
+        await setDoc(doc(db, "wallets/st1"), { balanceUsd: 10 });
+        await setDoc(doc(db, "wallets/st1/entries/sale-o1"), { type: "sale", amountUsd: 10 });
+        await setDoc(doc(db, "wallets/platform"), { balanceUsd: 1 });
+        await setDoc(doc(db, "withdrawals/w1"), { uid: "st1", amountUsd: 5, status: "pending" });
+      });
+    });
+    it("a seller sees only his own wallet, history and withdrawals", async () => {
+      await assertSucceeds(getDoc(doc(as("st1"), "wallets/st1")));
+      await assertSucceeds(getDocs(collection(as("st1"), "wallets/st1/entries")));
+      await assertSucceeds(getDocs(query(collection(as("st1"), "withdrawals"), where("uid", "==", "st1"))));
+      await assertFails(getDoc(doc(as("st2"), "wallets/st1")));
+      await assertFails(getDoc(doc(as("st1"), "wallets/platform")));
+      await assertFails(getDocs(collection(as("st1"), "withdrawals")));
+      await assertFails(getDoc(doc(as("cust"), "withdrawals/w1")));
+    });
+    it("the owner sees all money documents", async () => {
+      await assertSucceeds(getDoc(doc(as("owner"), "wallets/st1")));
+      await assertSucceeds(getDoc(doc(as("owner"), "wallets/platform")));
+      await assertSucceeds(getDocs(collection(as("owner"), "withdrawals")));
+    });
+    it("nobody writes balances or withdrawals from the app (not even the owner)", async () => {
+      await assertFails(setDoc(doc(as("st1"), "wallets/st1"), { balanceUsd: 9999 }));
+      await assertFails(updateDoc(doc(as("owner"), "wallets/st1"), { balanceUsd: 9999 }));
+      await assertFails(setDoc(doc(as("st1"), "wallets/st1/entries/x"), { amountUsd: 9999 }));
+      await assertFails(setDoc(doc(as("st1"), "withdrawals/w2"), { uid: "st1", amountUsd: 5, status: "pending" }));
+      await assertFails(updateDoc(doc(as("owner"), "withdrawals/w1"), { status: "paid" }));
+    });
+    it("order payment info cannot be forged by anyone", async () => {
+      await assertFails(updateDoc(doc(as("cust"), "orders/o1"), { payment: { status: "finished" } }));
+      await assertFails(updateDoc(doc(as("st1"), "orders/o1"), { payment: { status: "finished" } }));
+      await assertFails(updateDoc(doc(as("owner"), "orders/o1"), { payment: { status: "finished" } }));
+    });
+    it("only the owner sets the commission (0–50%)", async () => {
+      const cfg = (o = {}) => ({ commissionPct: 12.5, enabled: true, updatedAt: serverTimestamp(), ...o });
+      await assertSucceeds(setDoc(doc(as("owner"), "config/payments"), cfg()));
+      await assertFails(setDoc(doc(as("owner"), "config/payments"), cfg({ commissionPct: 80 })));
+      await assertFails(setDoc(doc(as("owner"), "config/payments"), cfg({ commissionPct: -1 })));
+      await assertFails(setDoc(doc(as("owner"), "config/payments"), { ...cfg(), sellerId: "x" }));
+      await assertFails(setDoc(doc(as("st1"), "config/payments"), cfg()));
+      await assertSucceeds(getDoc(doc(as("cust"), "config/payments")));
+    });
+  });
+
   describe("catalog & permissions", () => {
     it("anyone reads the catalog", async () => { await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), "categories/gaming"))); });
     it("products: permission + section + valid fields", async () => {

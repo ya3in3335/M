@@ -301,9 +301,27 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.uid == uid();
     }
 
-    // Public app configuration (e.g. the push server URL). Written only by the setup script (admin).
+    // Public app configuration. config/push is written only by the setup script (admin);
+    // config/payments (commission %, on/off) is edited by the owner from the control panel.
     match /config/{id} {
       allow read: if signedIn();
+      allow write: if id == 'payments' && isOwner()
+        && d().keys().hasOnly(['commissionPct', 'enabled', 'updatedAt'])
+        && d().commissionPct is number && d().commissionPct >= 0 && d().commissionPct <= 50
+        && d().enabled is bool && now(d().updatedAt);
+    }
+
+    // Money (USDT payments): balances, history and withdrawals are written ONLY by the payment server.
+    match /wallets/{wid} {
+      allow read: if active() && (wid == uid() || isOwner());
+      allow write: if false;
+      match /entries/{eid} {
+        allow read: if active() && (wid == uid() || isOwner());
+        allow write: if false;
+      }
+    }
+    match /withdrawals/{id} {
+      allow read: if active() && (resource.data.uid == uid() || isOwner());
       allow write: if false;
     }
 

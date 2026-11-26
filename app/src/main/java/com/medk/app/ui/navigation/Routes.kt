@@ -36,6 +36,8 @@ object Routes {
     const val ADMIN_P2P = "admin/p2p"
     const val ADMIN_MORE = "admin/more"
     const val ADMIN_CUSTOMERS = "admin/customers"
+    const val WALLET = "wallet"
+    const val ADMIN_PAYMENTS = "admin/payments"
     const val CUSTOMER_DETAIL = "admin/customer/{id}"
     fun customerDetail(id: String) = "admin/customer/$id"
 

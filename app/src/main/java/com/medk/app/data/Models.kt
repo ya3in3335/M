@@ -175,9 +175,35 @@ data class Order(
     @SerialName("delivered_at") val deliveredAt: String? = null,
     @SerialName("closed_at") val closedAt: String? = null,
     @SerialName("order_items") val items: List<OrderItem> = emptyList(),
+    val payment: PaymentInfo? = null,
 ) {
     val statusEnum get() = OrderStatus.of(status)
 }
+
+/** In-app USDT payment of an order (written only by the payment server). */
+@Serializable
+data class PaymentInfo(
+    val status: String, val invoiceUrl: String? = null, val amountUsd: Double = 0.0,
+    val paidUsd: Double? = null, val feeUsd: Double? = null, val commissionUsd: Double? = null,
+    val commissionPct: Double? = null, val sellerUsd: Double? = null,
+) {
+    val isFinished get() = status == "finished"
+    val label get() = when (status) {
+        "waiting" -> "بانتظار الدفع"; "confirming", "confirmed", "sending" -> "قيد التأكيد على الشبكة"
+        "partially_paid" -> "دفع ناقص"; "finished" -> "مدفوع بـ USDT"; "failed" -> "فشل الدفع"
+        "expired" -> "انتهت صلاحية الفاتورة"; "refunded" -> "مُسترجع"; else -> status
+    }
+}
+
+data class Wallet(val balanceUsd: Double = 0.0, val earnedUsd: Double = 0.0)
+data class WalletEntry(val id: String, val type: String, val amountUsd: Double, val reference: String?, val createdAt: String) {
+    val label get() = when (type) { "sale" -> "بيع"; "commission" -> "عمولة"; "withdraw" -> "سحب"; "refund" -> "استرجاع سحب"; else -> type }
+}
+data class Withdrawal(val id: String, val uid: String, val name: String, val amountUsd: Double, val address: String,
+                      val status: String, val txid: String?, val createdAt: String) {
+    val label get() = when (status) { "pending" -> "قيد المراجعة"; "paid" -> "تم التحويل"; "rejected" -> "مرفوض"; else -> status }
+}
+data class PaymentsConfig(val enabled: Boolean = true, val commissionPct: Double = 10.0)
 
 @Serializable
 data class Conversation(
