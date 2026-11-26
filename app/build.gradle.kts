@@ -8,7 +8,8 @@ plugins {
     alias(libs.plugins.roborazzi)
 }
 
-// google-services.json is NOT committed. It is supplied locally or by CI (GitHub Secret).
+// google-services.json is public client config (project medk-app-261126-7730); data is protected by Firestore rules.
+// CI may override it with the GOOGLE_SERVICES_JSON secret.
 val hasGoogleServices = file("google-services.json").exists()
 if (hasGoogleServices) {
     apply(plugin = libs.plugins.google.services.get().pluginId)

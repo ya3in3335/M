@@ -11,7 +11,6 @@
 *.jks
 *.keystore
 !app/keys/medk-debug.keystore
-app/google-services.json
 secrets.properties
 supabase/.temp/
 supabase/functions/**/.env

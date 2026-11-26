@@ -79,7 +79,7 @@ jobs:
             echo "$GOOGLE_SERVICES_JSON" | base64 -d > app/google-services.json
             echo "google-services.json written"
           else
-            echo "::warning::GOOGLE_SERVICES_JSON secret not set — the APK will show a 'not configured' screen."
+            echo "Using committed app/google-services.json"
           fi
 
       - name: Release keystore (optional)
@@ -96,8 +96,28 @@ jobs:
       - name: Kotlin compilation
         run: ./gradlew :app:compileStoreProdDebugKotlin :app:compileAdminProdDebugKotlin :app:compileStoreDemoDebugKotlin :app:compileAdminDemoDebugKotlin --stacktrace
 
+      - name: Cache Robolectric Android jars
+        uses: actions/cache@v4
+        with:
+          path: ~/robolectric-jars
+          key: robolectric-jars-14-15-i7
+
+      - name: Download Robolectric Android jars (with retries)
+        run: |
+          mkdir -p ~/robolectric-jars && cd ~/robolectric-jars
+          base=https://maven.google.com/org/robolectric/android-all-instrumented
+          for v in 14-robolectric-10818077-i7 15-robolectric-12650502-i7; do
+            f=android-all-instrumented-$v.jar
+            [ -s "$f" ] && continue
+            for m in "$base" https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented; do
+              curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o "$f" "$m/$v/$f" && break
+            done
+            [ -s "$f" ] || { echo "::error::could not download $f"; exit 1; }
+          done
+          ls -la
+
       - name: Unit & screenshot tests
-        run: ./gradlew :app:testStoreProdDebugUnitTest :app:testStoreDemoDebugUnitTest :app:testAdminDemoDebugUnitTest --stacktrace
+        run: ./gradlew :app:testStoreProdDebugUnitTest :app:testStoreDemoDebugUnitTest :app:testAdminDemoDebugUnitTest -ProbolectricDepsDir=$HOME/robolectric-jars --stacktrace
 
       - name: Build debug APKs (store + admin, prod + demo)
         run: ./gradlew :app:assembleStoreProdDebug :app:assembleStoreDemoDebug :app:assembleAdminProdDebug :app:assembleAdminDemoDebug --stacktrace
@@ -111,7 +131,7 @@ jobs:
 
       - name: Remove secrets from workspace
         if: always()
-        run: rm -f app/google-services.json "$RUNNER_TEMP/medk.jks"
+        run: rm -f "$RUNNER_TEMP/medk.jks"
 
       - uses: actions/upload-artifact@v4
         with:
