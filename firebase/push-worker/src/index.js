@@ -334,6 +334,10 @@ async function createInvoice(env, fs, caller, body, origin) {
   if (!(await paymentsConfig(fs)).enabled) throw new HttpError(503, "payments_disabled");
   const amount = round2(Number(o.totalUsd || 0));
   if (!(amount >= 1)) throw new HttpError(400, "amount_too_small");
+  // The gateway refuses tiny crypto payments (network fees); tell the customer the current minimum.
+  const min = await nowpay(env, `/min-amount?currency_from=${PAY_CURRENCY}&currency_to=${PAY_CURRENCY}&fiat_equivalent=usd`).catch(() => null);
+  const minUsd = min && Number(min.fiat_equivalent);
+  if (Number.isFinite(minUsd) && amount < minUsd) throw new HttpError(400, `amount_below_min:${Math.ceil(minUsd * 100) / 100}`);
   const p = o.payment;
   if (p && p.invoiceUrl && p.status === "waiting" && Date.now() - Date.parse(p.createdAt || 0) < 3600_000) return { url: p.invoiceUrl };
   const inv = await nowpay(env, "/invoice", {

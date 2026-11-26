@@ -30,7 +30,7 @@ function reset() {
     "conversations/c1/messages/m1": { senderId: "cust", body: "مرحبا", createdAt: iso() },
     "conversations/c2/messages/m2": { senderId: "cust", body: null, attachment: { type: "image" }, createdAt: iso() },
     "orders/o3": { reference: "MK-3", customerId: "cust", staffId: "st1", status: "open", totalUsd: 20, items: [], createdAt: iso(), updatedAt: iso() },
-    "orders/o4": { reference: "MK-4", customerId: "cust", staffId: null, status: "open", totalUsd: 10, items: [], createdAt: iso(), updatedAt: iso() },
+    "orders/o4": { reference: "MK-4", customerId: "cust", staffId: null, status: "open", totalUsd: 12, items: [], createdAt: iso(), updatedAt: iso() },
     "config/payments": { commissionPct: 10, enabled: true },
     "pushTokens/tc": { uid: "cust", token: "TOK_CUST" }, "pushTokens/ts": { uid: "st1", token: "TOK_ST1" },
     "pushTokens/to": { uid: "own", token: "TOK_OWN" }, "pushTokens/dead": { uid: "own", token: "TOK_DEAD" },
@@ -55,6 +55,7 @@ globalThis.fetch = async (url, init = {}) => {
   if (url.includes("nowpayments.io")) {
     if (init.headers["x-api-key"] !== "NPKEY") return new Response('{"message":"bad key"}', { status: 403 });
     if (url.endsWith("/invoice")) { const b = JSON.parse(init.body); invoices.push(b); return ok({ id: 9000 + invoices.length, invoice_url: `https://pay/inv/${invoices.length}` }); }
+    if (url.includes("/min-amount")) return ok({ min_amount: 10.3, fiat_equivalent: 10.31 });
     const pid = url.split("/payment/")[1]; return payments[pid] ? ok(payments[pid]) : new Response("{}", { status: 404 });
   }
   if (url.includes("fcm.googleapis.com")) {
@@ -160,6 +161,10 @@ await t("only the order's customer can pay it; paid orders refused", async () =>
   assert.equal((await call("cust2", { orderId: "o3" }, undefined, "/pay")).status, 403);
   assert.equal((await call("cust", { orderId: "o1" }, undefined, "/pay")).status, 409);
 });
+await t("amount below the gateway minimum → clear error, no invoice", async () => {
+  db["orders/o3"].totalUsd = 5;
+  assert.equal((await call("cust", { orderId: "o3" }, undefined, "/pay")).error, "amount_below_min:10.31"); assert.equal(invoices.length, 0);
+});
 await t("payments disabled by the owner → refused", async () => {
   db["config/payments"].enabled = false; assert.equal((await call("cust", { orderId: "o3" }, undefined, "/pay")).status, 503);
 });
@@ -191,9 +196,9 @@ await t("wrong amount / unknown invoice / not finished → no money moves", asyn
 });
 await t("order without a seller → everything to the platform", async () => {
   await call("cust", { orderId: "o4" }, undefined, "/pay");
-  payments["7"] = finished({ payment_id: 7, invoice_id: 9001, order_id: "o4", price_amount: 10, outcome_amount: 9.95 });
-  const r = await ipn(7); assert.deepEqual(r.split, { fee: 0.05, commission: 9.95, seller: 0 });
-  assert.equal(db["wallets/platform"].balanceUsd, 9.95);
+  payments["7"] = finished({ payment_id: 7, invoice_id: 9001, order_id: "o4", price_amount: 12, outcome_amount: 11.95 });
+  const r = await ipn(7); assert.deepEqual(r.split, { fee: 0.05, commission: 11.95, seller: 0 });
+  assert.equal(db["wallets/platform"].balanceUsd, 11.95);
 });
 await t("seller withdraws to TRC20; balance reserved; validation", async () => {
   db["wallets/st1"] = { balanceUsd: 50 };
