@@ -2,7 +2,6 @@ package com.medk.app.core
 
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.firestore.FirebaseFirestoreException
-import com.google.firebase.functions.FirebaseFunctionsException
 import java.io.IOException
 import java.text.NumberFormat
 import java.time.OffsetDateTime
@@ -20,14 +19,12 @@ sealed interface UiState<out T> {
 /** Turns any thrown error into a readable Arabic message. */
 fun Throwable.friendly(): String {
     val raw = when (this) {
-        is FirebaseFunctionsException -> "${code.name} ${message.orEmpty()}"
         is FirebaseFirestoreException -> "${code.name} ${message.orEmpty()}"
         else -> message.orEmpty()
     }
     val m = raw.lowercase()
     return when {
         this is FirebaseNetworkException || (this is FirebaseFirestoreException && code == FirebaseFirestoreException.Code.UNAVAILABLE) ||
-            (this is FirebaseFunctionsException && code == FirebaseFunctionsException.Code.UNAVAILABLE) ||
             this is IOException || m.contains("unable to resolve host") || m.contains("timeout") || m.contains("failed to connect") ->
             "تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت."
         m.contains("password is invalid") || m.contains("invalid_login") || m.contains("credential is incorrect") ||
@@ -39,6 +36,7 @@ fun Throwable.friendly(): String {
         m.contains("too many") || m.contains("blocked all requests") -> "محاولات كثيرة، حاول لاحقاً."
         m.contains("account_disabled") || m.contains("user account has been disabled") -> "هذا الحساب موقوف. تواصل مع الإدارة."
         m.contains("recent") && m.contains("login") -> "لأسباب أمنية، سجّل الدخول من جديد ثم أعد المحاولة."
+        m.contains("email_not_verified") -> "أكّد بريدك الإلكتروني أولاً لإتمام الطلب. أرسلنا لك رابط التأكيد — افتحه ثم أعد المحاولة."
         m.contains("insufficient stock") -> "الكمية المطلوبة غير متوفرة حالياً."
         m.contains("no available products") -> "المنتجات في السلة لم تعد متوفرة."
         m.contains("resource_exhausted") || m.contains("too many requests") -> "طلبات كثيرة خلال وقت قصير، انتظر دقيقة ثم أعد المحاولة."

@@ -35,7 +35,6 @@ android {
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
         versionName = System.getenv("VERSION_NAME") ?: "1.0.0"
 
-        buildConfigField("String", "FUNCTIONS_REGION", "\"${cfg("FUNCTIONS_REGION").ifEmpty { "europe-west1" }}\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${cfg("GOOGLE_WEB_CLIENT_ID")}\"")
         buildConfigField("Boolean", "HAS_GOOGLE_SERVICES", hasGoogleServices.toString())
         resourceConfigurations += listOf("ar", "en")
@@ -174,8 +173,6 @@ dependencies {
     implementation(libs.googleid)
 
     implementation(libs.firebase.firestore)
-    implementation(libs.firebase.storage)
-    implementation(libs.firebase.functions)
     implementation(libs.firebase.appcheck.playintegrity)
     debugImplementation(libs.firebase.appcheck.debug)
 

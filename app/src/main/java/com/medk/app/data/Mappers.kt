@@ -93,6 +93,7 @@ fun DocumentSnapshot.toConversation() = Conversation(
     id = id, customerId = getString("customerId") ?: "", staffId = getString("staffId"), orderId = getString("orderId"),
     productId = getString("productId"), sectionId = getString("sectionId"), subject = getString("subject"),
     lastMessage = getString("lastMessage"), lastMessageAt = ts("lastMessageAt"), createdAt = ts("createdAt"),
+    lastSenderId = getString("lastSenderId"),
 )
 
 fun DocumentSnapshot.toMessage(conversationId: String): Message {

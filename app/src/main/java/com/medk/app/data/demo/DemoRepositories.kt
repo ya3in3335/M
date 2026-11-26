@@ -83,6 +83,7 @@ class DemoAuthRepository(private val c: AppContainer) : AuthRepository(c) {
         val p = me(); S.profiles[p.id] = p.copy(fullName = name); refreshProfile()
     }
     override val isPasswordAccount: Boolean get() = true
+    override suspend fun ensureEmailVerified() {}
     override suspend fun changePassword(current: String, newPassword: String) { net() }
     override suspend fun signOut(context: Context) {
         c.notifications.stop(); S.currentUid = null; c.cart.clear(); _state.value = AuthState.SignedOut
@@ -186,7 +187,7 @@ class DemoChatRepository(private val c: AppContainer) : ChatRepository(c) {
         val m = Message(S.id(), convId, sender, body, path, type, name, S.now())
         S.messages += m
         val preview = body?.takeIf { it.isNotBlank() } ?: when (type) { "image" -> "📷 صورة"; "video" -> "🎬 فيديو"; else -> "📄 ملف PDF" }
-        S.conversations.replaceAll { if (it.id == convId) it.copy(lastMessage = preview, lastMessageAt = m.createdAt) else it }
+        S.conversations.replaceAll { if (it.id == convId) it.copy(lastMessage = preview, lastMessageAt = m.createdAt, lastSenderId = sender) else it }
         S.messageEvents.tryEmit(m)
         val conv = S.conversations.first { it.id == convId }
         val target = if (sender == conv.customerId) conv.staffId ?: S.OWNER else conv.customerId
@@ -263,7 +264,6 @@ class DemoAdminRepository(private val c: AppContainer) : AdminRepository(c) {
             canUpdateOrders = perms.updateOrders, canManageP2p = perms.manageP2p, canViewStats = perms.viewStats, createdAt = S.now())
         S.profiles[p.id] = p; return p
     }
-    override suspend fun setStaffPassword(uid: String, password: String) { net(); if (!isOwner()) error("owner only") }
     override suspend fun setUserActive(uid: String, active: Boolean) { net(); if (!isOwner()) error("owner only"); S.profiles[uid] = S.profiles.getValue(uid).copy(isActive = active) }
     override suspend fun setRole(uid: String, role: Role) {
         net(); if (!isOwner() || uid == S.currentUid || role == Role.OWNER) error("permission denied")

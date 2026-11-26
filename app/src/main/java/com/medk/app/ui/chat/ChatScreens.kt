@@ -301,9 +301,7 @@ fun ChatScreen(id: String, nav: NavHostController) {
                 DropdownMenu(attachMenu, { attachMenu = false }) {
                     DropdownMenuItem({ Text("صورة") }, leadingIcon = { Icon(Icons.Filled.Image, null) }, onClick = {
                         attachMenu = false; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
-                    DropdownMenuItem({ Text("فيديو") }, leadingIcon = { Icon(Icons.Filled.Videocam, null) }, onClick = {
-                        attachMenu = false; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) })
-                    DropdownMenuItem({ Text("ملف PDF") }, leadingIcon = { Icon(Icons.Filled.PictureAsPdf, null) }, onClick = {
+                    DropdownMenuItem({ Text("ملف PDF (حتى 650 كيلوبايت)") }, leadingIcon = { Icon(Icons.Filled.PictureAsPdf, null) }, onClick = {
                         attachMenu = false; pickPdf.launch("application/pdf") })
                 }
             }

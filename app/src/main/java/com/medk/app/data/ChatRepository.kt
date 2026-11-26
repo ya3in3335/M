@@ -1,25 +1,19 @@
 package com.medk.app.data
 
 import android.net.Uri
-import android.provider.OpenableColumns
 import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.Query
-import com.google.firebase.storage.StorageMetadata
 import com.medk.app.core.AppContainer
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withContext
-import java.util.UUID
 
-/** Conversations (read-only for clients) + messages subcollection + private Storage attachments. */
+/** Conversations + messages + attachments, all in Firestore (free plan). */
 open class ChatRepository(private val c: AppContainer) {
     private val db get() = c.firestore
-    private val urlCache = mutableMapOf<String, String>()
     private val profileCache = mutableMapOf<String, Profile>()
 
     private fun convs() = db.collection("conversations")
@@ -63,51 +57,49 @@ open class ChatRepository(private val c: AppContainer) {
         awaitClose { reg.remove() }
     }
 
-    private suspend fun post(conversationId: String, body: String?, attachment: Map<String, String?>?): Message {
+    /** Message + conversation "last message" update (+ optional file document) in one atomic batch. */
+    private suspend fun post(conversationId: String, body: String?, file: Pair<MediaRepository.ChatFile, Map<String, Any?>>?): Message {
         val uid = c.auth.currentUid ?: error("not signed in")
+        val batch = db.batch()
+        file?.let { (f, data) -> batch.set(db.document(f.path), data) }
         val ref = msgs(conversationId).document()
-        ref.set(mapOf("senderId" to uid, "body" to body, "attachment" to attachment, "createdAt" to FieldValue.serverTimestamp())).await()
+        val attachment = file?.first?.let { mapOf("path" to it.path, "type" to it.type, "name" to it.name) }
+        batch.set(ref, mapOf("senderId" to uid, "body" to body, "attachment" to attachment, "createdAt" to FieldValue.serverTimestamp()))
+        val preview = body?.takeIf { it.isNotBlank() } ?: if (file?.first?.type == "image") "📷 صورة" else "📄 ملف PDF"
+        batch.update(convs().document(conversationId), mapOf("lastMessage" to preview.take(200),
+            "lastMessageAt" to FieldValue.serverTimestamp(), "lastSenderId" to uid))
+        batch.commit().await()
         return Message(ref.id, conversationId, uid, body, attachment?.get("path"), attachment?.get("type"), attachment?.get("name"),
             java.time.OffsetDateTime.now().toString())
     }
 
     open suspend fun sendText(conversationId: String, text: String): Message = post(conversationId, text.trim(), null)
 
-    /** Uploads an image/video/PDF to private storage (chat/{conversation}/...) then posts the message. */
-    open suspend fun sendAttachment(conversationId: String, uri: Uri, caption: String?): Message {
-        val resolver = c.context.contentResolver
-        val mime = resolver.getType(uri) ?: "application/octet-stream"
-        val type = when {
-            mime.startsWith("image/") -> "image"
-            mime.startsWith("video/") -> "video"
-            mime == "application/pdf" -> "pdf"
-            else -> error("نوع الملف غير مدعوم")
-        }
-        val name = withContext(Dispatchers.IO) {
-            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { cur ->
-                if (cur.moveToFirst()) {
-                    if (cur.getLong(1) > 50L * 1024 * 1024) error("حجم الملف يتجاوز 50 ميغابايت")
-                    cur.getString(0)
-                } else null
-            }
-        } ?: "file"
-        val ext = name.substringAfterLast('.', "").filter { it.isLetterOrDigit() }.take(5).ifEmpty { mime.substringAfter('/').take(5) }
-        val path = "chat/$conversationId/${UUID.randomUUID()}.$ext"
-        c.storage.reference.child(path).putFile(uri, StorageMetadata.Builder().setContentType(mime).build()).await()
-        return post(conversationId, caption?.trim()?.takeIf { it.isNotEmpty() }, mapOf("path" to path, "type" to type, "name" to name.take(200)))
-    }
+    /** Images (compressed) and small PDFs are stored in Firestore; video is not available on the free plan. */
+    open suspend fun sendAttachment(conversationId: String, uri: Uri, caption: String?): Message =
+        post(conversationId, caption?.trim()?.takeIf { it.isNotEmpty() }, c.media.prepareChatFile(conversationId, uri))
 
-    /** Download URL for a private attachment (only participants are allowed to obtain it). */
-    open suspend fun attachmentUrl(path: String): String =
-        urlCache[path] ?: c.storage.reference.child(path).downloadUrl.await().toString().also { urlCache[path] = it }
+    /** "chatfile:" reference for images, local content:// URI for PDFs. */
+    open suspend fun attachmentUrl(path: String): String = c.media.chatFileUri(path)
 
     /** Opens/reuses a conversation with the seller of a product/section (or support when both null). */
-    open suspend fun start(productId: String?, sectionId: String?, subject: String?): String =
-        c.cloud.call("startConversation", mapOf("product_id" to productId, "section_id" to sectionId, "subject" to subject))["conversation_id"] as String
+    open suspend fun start(productId: String?, sectionId: String?, subject: String?): String {
+        val uid = c.auth.currentUid ?: error("not signed in")
+        val sec = productId?.let { db.collection("products").document(it).get().await().getString("sectionId") } ?: sectionId
+        val staffId = sec?.let { db.collection("sections").document(it).get().await().getString("assignedStaffId") }
+        convs().whereEqualTo("customerId", uid).whereEqualTo("orderId", null)
+            .whereEqualTo("productId", productId).whereEqualTo("sectionId", sec).limit(1).get().await()
+            .documents.firstOrNull()?.let { return it.id }
+        val ref = convs().document()
+        ref.set(mapOf("customerId" to uid, "staffId" to staffId, "orderId" to null, "productId" to productId, "sectionId" to sec,
+            "subject" to (subject ?: "الدعم الفني").take(140), "lastMessage" to null,
+            "lastMessageAt" to FieldValue.serverTimestamp(), "lastSenderId" to uid, "createdAt" to FieldValue.serverTimestamp())).await()
+        return ref.id
+    }
 
     open suspend fun assignStaff(conversationId: String, staffId: String?) {
         val conv = conversation(conversationId)
-        conv.orderId?.let { c.orders.assignStaff(it, staffId) } ?: error("لا يمكن إسناد محادثة بدون طلب")
+        conv.orderId?.let { c.orders.assignStaff(it, staffId) } ?: convs().document(conversationId).update("staffId", staffId).await()
     }
 
     /** Public cards (name/avatar/role) of other participants. */

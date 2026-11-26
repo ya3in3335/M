@@ -347,7 +347,6 @@ fun StaffDetailScreen(id: String, nav: NavHostController) {
             var perms by remember(d.profile) { mutableStateOf(d.profile.permissions) }
             val selected = remember(d.sections) { mutableStateListOf<String>().apply { addAll(d.sections) } }
             val assigned = d.allSections.filter { it.assignedStaffId == id }.map { it.id }.toSet()
-            var newPass by rememberSaveable { mutableStateOf("") }
             var confirmToggle by remember { mutableStateOf(false) }
             var confirmDemote by remember { mutableStateOf(false) }
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -397,10 +396,11 @@ fun StaffDetailScreen(id: String, nav: NavHostController) {
                     action.run(toast, { toast("تم حفظ الصلاحيات"); vm.load(silent = true) }) { c.admin.setPermissions(id, perms, selected.toSet()) }
                 }, loading = busy)
                 Text("الأمان", style = MaterialTheme.typography.titleMedium)
-                MedkTextField(newPass, { newPass = it }, "كلمة مرور جديدة (8 أحرف على الأقل)", leading = Icons.Filled.Lock, isPassword = true)
-                SecondaryButton("تعيين كلمة المرور", {
-                    action.run(toast, { toast("تم تغيير كلمة المرور وتسجيل خروج البائع من أجهزته"); newPass = "" }) { c.admin.setStaffPassword(id, newPass) }
-                }, enabled = newPass.length >= 8 && !busy)
+                Text("يُرسَل إلى بريد البائع رابط من Google ليختار كلمة مرور جديدة بنفسه.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SecondaryButton("إرسال رابط تغيير كلمة المرور", {
+                    action.run(toast, { toast("تم إرسال الرابط إلى ${d.profile.email}") }) { c.auth.sendPasswordReset(d.profile.email ?: error("لا يوجد بريد")) }
+                }, enabled = !busy && d.profile.email != null)
                 SecondaryButton(if (d.profile.isActive) "إيقاف الحساب" else "تفعيل الحساب", { confirmToggle = true },
                     color = if (d.profile.isActive) MedkColors.Danger else MedkColors.Success, enabled = !busy)
                 SecondaryButton("إزالة صفة البائع (تحويله إلى عميل)", { confirmDemote = true }, color = MedkColors.Danger, enabled = !busy)

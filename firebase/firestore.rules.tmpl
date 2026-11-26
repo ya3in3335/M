@@ -1,0 +1,293 @@
+rules_version = '2';
+
+// =====================================================================
+// MED-K — Firestore security rules for the FREE (Spark) plan.
+// There is no server code: every business rule (prices, totals, stock,
+// roles, permissions, data isolation) is enforced here, on Google's servers.
+// Roles live in users/{uid}.role and can only be changed by the owner.
+// Owner e-mails are injected at deploy time by deploy.sh (__OWNER_EMAILS__).
+// =====================================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------ helpers
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function userPath(id) { return /databases/$(database)/documents/users/$(id); }
+    function me() { return get(userPath(uid())).data; }
+    function active() { return signedIn() && exists(userPath(uid())) && me().active == true; }
+    function verified() { return request.auth.token.email_verified == true; }
+    function isOwnerEmail() {
+      return signedIn() && verified() && request.auth.token.email.lower() in __OWNER_EMAILS__;
+    }
+    function isOwner() { return active() && me().role == 'owner'; }
+    function isStaff() { return active() && me().role == 'staff'; }
+    function isTeam() { return isOwner() || isStaff(); }
+    function perm(p) { return isOwner() || (isStaff() && me().get('perms', {}).get(p, false) == true); }
+    function hasSection(s) { return isOwner() || (isStaff() && s != null && s in me().get('sections', [])); }
+
+    function str(v, max) { return v is string && v.size() > 0 && v.size() <= max; }
+    function optStr(v, max) { return v == null || (v is string && v.size() <= max); }
+    function money(v) { return (v is int || v is float) && v >= 0 && v <= 100000000; }
+    function optMoney(v) { return v == null || money(v); }
+    // Images are https URLs or "media:<id>" (compressed image stored in /media).
+    function img(v) { return v == null || (v is string && v.size() <= 1000 && (v.matches('https://.*') || v.matches('media:[A-Za-z0-9_-]{1,64}'))); }
+    function d() { return request.resource.data; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function now(v) { return v == request.time; }
+
+    function defaultPerms(p) {
+      return p == {'manageProducts': false, 'updateOrders': true, 'manageP2p': false, 'viewStats': false};
+    }
+    function validPerms(p) {
+      return p.keys().hasOnly(['manageProducts', 'updateOrders', 'manageP2p', 'viewStats'])
+        && p.manageProducts is bool && p.updateOrders is bool && p.manageP2p is bool && p.viewStats is bool;
+    }
+
+    function conv(cid) { return get(/databases/$(database)/documents/conversations/$(cid)).data; }
+    // state after the current batch (a conversation and its first message are written together)
+    function convAfter(cid) { return getAfter(/databases/$(database)/documents/conversations/$(cid)).data; }
+    function canAccess(c) {
+      return active() && (c.customerId == uid() || (isStaff() && c.staffId == uid()) || isOwner());
+    }
+    function sectionStaff(sid) {
+      return sid == null ? null : get(/databases/$(database)/documents/sections/$(sid)).data.get('assignedStaffId', null);
+    }
+
+    // ------------------------------------------------------------- users
+    match /users/{userId} {
+      allow get: if signedIn() && (userId == uid() || isOwner());
+      allow list: if isOwner();
+
+      function baseProfile() {
+        return d().keys().hasOnly(['email', 'fullName', 'avatarUrl', 'role', 'active', 'perms', 'sections', 'createdAt', 'updatedAt'])
+          && optStr(d().get('fullName', null), 80) && img(d().get('avatarUrl', null))
+          && d().active == true && d().sections is list && now(d().createdAt);
+      }
+      // 1) first sign-in: a customer profile — or owner when the verified e-mail is an owner e-mail
+      // 2) the owner creates a seller profile for an account it just created
+      allow create: if baseProfile() && (
+          (userId == uid() && d().email == request.auth.token.get('email', null)
+            && ((d().role == 'customer' && defaultPerms(d().perms) && d().sections.size() == 0)
+                || (d().role == 'owner' && isOwnerEmail())))
+          || (userId != uid() && isOwner() && d().role == 'staff' && validPerms(d().perms) && str(d().email, 120)));
+
+      allow update: if
+          // own display fields
+          (active() && userId == uid() && changed().hasOnly(['fullName', 'avatarUrl', 'updatedAt'])
+            && str(d().fullName, 80) && img(d().get('avatarUrl', null)) && now(d().updatedAt))
+          // owner e-mail promoted after verification
+          || (userId == uid() && resource.data.role == 'customer' && isOwnerEmail()
+            && changed().hasOnly(['role', 'perms', 'updatedAt']) && d().role == 'owner' && validPerms(d().perms))
+          // the owner manages sellers and customers (never another owner, never himself)
+          || (isOwner() && userId != uid() && resource.data.role != 'owner'
+            && changed().hasOnly(['role', 'active', 'perms', 'sections', 'updatedAt'])
+            && d().role in ['customer', 'staff'] && d().active is bool && validPerms(d().perms)
+            && d().sections is list && d().sections.size() <= 200 && now(d().updatedAt));
+      allow delete: if false;
+
+      match /favorites/{productId} {
+        allow read, delete: if active() && userId == uid();
+        allow create: if active() && userId == uid() && d().keys().hasOnly(['createdAt']) && now(d().createdAt);
+        allow update: if false;
+      }
+    }
+
+    // Public card (name, avatar, role) — role must match the private profile.
+    match /publicProfiles/{userId} {
+      allow read: if active();
+      allow create, update: if signedIn()
+        && d().keys().hasOnly(['displayName', 'avatarUrl', 'role'])
+        && optStr(d().get('displayName', null), 80) && img(d().get('avatarUrl', null))
+        && d().role == getAfter(userPath(userId)).data.role
+        && (userId == uid() || isOwner());
+      allow delete: if false;
+    }
+
+    // ----------------------------------------------------------- catalog
+    match /categories/{id} {
+      allow read: if true;
+      // The five fixed categories are created once by the owner (first sign-in).
+      allow create: if isOwner() && id in ['gaming', 'subscriptions', 'accounts', 'p2p', 'other']
+        && d().keys().hasOnly(['slug', 'name', 'description', 'colorKey', 'iconKey', 'sortOrder', 'active'])
+        && d().slug == id && str(d().name, 80) && d().sortOrder is int && d().active is bool;
+      allow update: if isOwner()
+        && changed().hasOnly(['name', 'description', 'sortOrder', 'active'])
+        && str(d().name, 80) && optStr(d().get('description', null), 300)
+        && d().sortOrder is int && d().active is bool;
+      allow delete: if false;
+    }
+
+    function validSection(x) {
+      return x.keys().hasOnly(['categoryId', 'name', 'description', 'imageUrl', 'assignedStaffId', 'sortOrder', 'active', 'createdAt'])
+        && str(x.categoryId, 40) && exists(/databases/$(database)/documents/categories/$(x.categoryId))
+        && str(x.name, 80) && optStr(x.get('description', null), 300) && img(x.get('imageUrl', null))
+        && (x.get('assignedStaffId', null) == null || exists(userPath(x.assignedStaffId)))
+        && x.sortOrder is int && x.active is bool;
+    }
+    match /sections/{id} {
+      allow read: if true;
+      allow create, update: if isOwner() && validSection(d());
+      allow delete: if isOwner();
+    }
+
+    function validProduct(x) {
+      return x.keys().hasOnly(['categoryId', 'sectionId', 'name', 'description', 'priceUsd', 'priceDzd', 'stock',
+                               'available', 'images', 'createdAt', 'updatedAt', 'lastOrderId'])
+        && str(x.categoryId, 40) && exists(/databases/$(database)/documents/categories/$(x.categoryId))
+        && (x.get('sectionId', null) == null || exists(/databases/$(database)/documents/sections/$(x.sectionId)))
+        && str(x.name, 120) && optStr(x.get('description', null), 2000)
+        && money(x.priceUsd) && money(x.priceDzd)
+        && (x.get('stock', null) == null || (x.stock is int && x.stock >= 0 && x.stock <= 1000000))
+        && x.available is bool && x.images is list && x.images.size() <= 8
+        && now(x.updatedAt);
+    }
+    match /products/{id} {
+      allow get, list: if resource.data.available == true || isTeam();
+      allow create: if perm('manageProducts') && hasSection(d().get('sectionId', null))
+        && validProduct(d()) && now(d().createdAt);
+      allow update: if (perm('manageProducts') && hasSection(resource.data.get('sectionId', null))
+          && hasSection(d().get('sectionId', null)) && validProduct(d()) && d().createdAt == resource.data.createdAt)
+        // checkout: a customer decrements stock by exactly the quantity of the order created in the same batch
+        || (active() && changed().hasOnly(['stock', 'lastOrderId']) && resource.data.get('stock', null) is int
+          && orderPlacedNow(d().lastOrderId, id)
+          && d().stock == resource.data.stock - getAfter(/databases/$(database)/documents/orders/$(d().lastOrderId)).data.items[0].quantity);
+      allow delete: if perm('manageProducts') && hasSection(resource.data.get('sectionId', null));
+    }
+    function orderPlacedNow(oid, pid) {
+      return oid is string && !exists(/databases/$(database)/documents/orders/$(oid))
+        && existsAfter(/databases/$(database)/documents/orders/$(oid))
+        && getAfter(/databases/$(database)/documents/orders/$(oid)).data.customerId == uid()
+        && getAfter(/databases/$(database)/documents/orders/$(oid)).data.items[0].productId == pid;
+    }
+
+    // Compressed catalog images (product / section / banner), public read.
+    match /media/{id} {
+      allow read: if true;
+      allow create: if (perm('manageProducts') || isOwner())
+        && d().keys().hasOnly(['data', 'mime', 'createdBy', 'createdAt'])
+        && d().data is string && d().data.size() <= 950000
+        && d().mime in ['image/jpeg', 'image/png', 'image/webp'] && d().createdBy == uid() && now(d().createdAt);
+      allow update: if false;
+      allow delete: if isOwner() || (isTeam() && resource.data.createdBy == uid());
+    }
+
+    match /banners/{id} {
+      allow read: if true;
+      allow create, update: if isOwner()
+        && d().keys().hasOnly(['title', 'subtitle', 'imageUrl', 'categorySlug', 'sortOrder', 'active'])
+        && str(d().title, 80) && optStr(d().get('subtitle', null), 160) && img(d().get('imageUrl', null))
+        && optStr(d().get('categorySlug', null), 40) && d().sortOrder is int && d().active is bool;
+      allow delete: if isOwner();
+    }
+
+    match /p2pAssets/{id} {
+      allow read: if true;
+      allow create, update: if perm('manageP2p')
+        && d().keys().hasOnly(['code', 'name', 'network', 'buyPriceDzd', 'sellPriceDzd', 'minAmount', 'maxAmount', 'active', 'sortOrder', 'updatedAt'])
+        && str(d().code, 12) && str(d().name, 60) && optStr(d().get('network', null), 30)
+        && money(d().buyPriceDzd) && money(d().sellPriceDzd)
+        && optMoney(d().get('minAmount', null)) && optMoney(d().get('maxAmount', null))
+        && d().active is bool && d().sortOrder is int && now(d().updatedAt);
+      allow delete: if perm('manageP2p');
+    }
+
+    // ------------------------------------------------------------ orders
+    // One order per product line. Price, totals, seller and stock are checked
+    // against the database here, so a modified app cannot cheat.
+    function validNewOrder() {
+      let it = d().items[0];
+      let p = get(/databases/$(database)/documents/products/$(it.productId)).data;
+      return d().keys().hasOnly(['reference', 'customerId', 'staffId', 'sectionId', 'status', 'totalUsd', 'totalDzd', 'note',
+                                 'items', 'createdAt', 'updatedAt', 'paidAt', 'deliveredAt', 'closedAt'])
+        && d().customerId == uid() && d().status == 'open'
+        && d().reference is string && d().reference.matches('MK-[A-Z0-9]{8}')
+        && optStr(d().get('note', null), 500)
+        && d().items is list && d().items.size() == 1
+        && it.keys().hasOnly(['productId', 'productName', 'imageUrl', 'quantity', 'unitPriceUsd', 'unitPriceDzd'])
+        && p.available == true
+        && it.quantity is int && it.quantity >= 1 && it.quantity <= 99
+        && it.productName == p.name
+        && it.unitPriceUsd == p.priceUsd && it.unitPriceDzd == p.priceDzd
+        && d().totalUsd == p.priceUsd * it.quantity && d().totalDzd == p.priceDzd * it.quantity
+        && d().sectionId == p.get('sectionId', null)
+        && d().staffId == sectionStaff(p.get('sectionId', null))
+        && (p.get('stock', null) == null
+            || (p.stock >= it.quantity
+                && getAfter(/databases/$(database)/documents/products/$(it.productId)).data.stock == p.stock - it.quantity))
+        && now(d().createdAt) && now(d().updatedAt)
+        && d().paidAt == null && d().deliveredAt == null && d().closedAt == null;
+    }
+    function timestampsOk() {
+      return now(d().updatedAt)
+        && (d().paidAt == resource.data.get('paidAt', null) || now(d().paidAt))
+        && (d().deliveredAt == resource.data.get('deliveredAt', null) || now(d().deliveredAt))
+        && (d().closedAt == resource.data.get('closedAt', null) || now(d().closedAt));
+    }
+    match /orders/{id} {
+      allow read: if active() && (resource.data.customerId == uid()
+        || (isStaff() && resource.data.staffId == uid()) || isOwner());
+      allow create: if active() && verified() && validNewOrder();
+      allow update: if timestampsOk() && d().status in ['open', 'paid', 'delivered', 'closed'] && (
+          (isOwner() && changed().hasOnly(['status', 'staffId', 'updatedAt', 'paidAt', 'deliveredAt', 'closedAt'])
+            && (d().get('staffId', null) == null || get(userPath(d().staffId)).data.role in ['staff', 'owner']))
+          || (isStaff() && resource.data.staffId == uid() && perm('updateOrders')
+            && changed().hasOnly(['status', 'updatedAt', 'paidAt', 'deliveredAt', 'closedAt'])));
+      allow delete: if false;
+    }
+
+    // ----------------------------------------------------- conversations
+    match /conversations/{cid} {
+      allow read: if canAccess(resource.data);
+      allow create: if active()
+        && d().keys().hasOnly(['customerId', 'staffId', 'orderId', 'productId', 'sectionId', 'subject',
+                               'lastMessage', 'lastMessageAt', 'lastSenderId', 'createdAt'])
+        && d().customerId == uid() && optStr(d().get('subject', null), 140)
+        && optStr(d().get('lastMessage', null), 200) && now(d().lastMessageAt) && now(d().createdAt)
+        && d().lastSenderId == uid()
+        && (d().get('orderId', null) != null
+            ? (getAfter(/databases/$(database)/documents/orders/$(d().orderId)).data.customerId == uid()
+               && d().staffId == getAfter(/databases/$(database)/documents/orders/$(d().orderId)).data.staffId)
+            : (d().get('productId', null) == null
+                ? d().staffId == sectionStaff(d().get('sectionId', null))
+                : (d().sectionId == get(/databases/$(database)/documents/products/$(d().productId)).data.get('sectionId', null)
+                   && d().staffId == sectionStaff(d().sectionId))));
+      allow update: if canAccess(resource.data) && (
+          (changed().hasOnly(['lastMessage', 'lastMessageAt', 'lastSenderId'])
+            && optStr(d().lastMessage, 200) && now(d().lastMessageAt) && d().lastSenderId == uid())
+          || (isOwner() && changed().hasOnly(['staffId'])));
+      allow delete: if false;
+
+      match /messages/{mid} {
+        allow read: if canAccess(conv(cid));
+        allow create: if canAccess(convAfter(cid))
+          && d().keys().hasOnly(['senderId', 'body', 'attachment', 'createdAt'])
+          && d().senderId == uid() && now(d().createdAt)
+          && optStr(d().get('body', null), 4000)
+          && (d().get('attachment', null) == null || (
+                d().attachment.keys().hasOnly(['path', 'type', 'name'])
+                && d().attachment.path is string
+                && d().attachment.path.matches('conversations/' + cid + '/files/[A-Za-z0-9_-]{1,64}')
+                && d().attachment.type in ['image', 'pdf']
+                && optStr(d().attachment.get('name', null), 200)))
+          && (d().get('body', null) != null || d().get('attachment', null) != null);
+        allow update, delete: if false;
+      }
+
+      // Chat attachments stored inside Firestore (≈ 650 KB max after compression).
+      match /files/{fid} {
+        allow read: if canAccess(conv(cid));
+        allow create: if canAccess(convAfter(cid))
+          && d().keys().hasOnly(['data', 'mime', 'name', 'createdBy', 'createdAt'])
+          && d().data is string && d().data.size() <= 950000
+          && d().mime in ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+          && optStr(d().get('name', null), 200) && d().createdBy == uid() && now(d().createdAt);
+        allow update, delete: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

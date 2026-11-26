@@ -4,15 +4,12 @@ import android.content.Context
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.functions.FirebaseFunctions
-import com.google.firebase.storage.FirebaseStorage
 import com.medk.app.BuildConfig
 import com.medk.app.data.AdminRepository
 import com.medk.app.data.AuthRepository
 import com.medk.app.data.CartRepository
 import com.medk.app.data.CatalogRepository
 import com.medk.app.data.ChatRepository
-import com.medk.app.data.CloudFunctions
 import com.medk.app.data.NotificationRepository
 import com.medk.app.data.OrderRepository
 import com.medk.app.data.SettingsRepository
@@ -40,13 +37,11 @@ class AppContainer(val context: Context) {
 
     val firebaseAuth: FirebaseAuth? by lazy { if (firebaseConfigured) FirebaseAuth.getInstance() else null }
     val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
-    val storage: FirebaseStorage by lazy { FirebaseStorage.getInstance() }
-    val functions: FirebaseFunctions by lazy { FirebaseFunctions.getInstance(BuildConfig.FUNCTIONS_REGION) }
 
     val settings by lazy { SettingsRepository(context) }
     val network by lazy { NetworkMonitor(context) }
     val updates by lazy { UpdateManager(context, json, appScope) }
-    val cloud by lazy { CloudFunctions(this) }
+    val media by lazy { com.medk.app.data.MediaRepository(this) }
     val auth: AuthRepository by lazy { if (isDemo) DemoAuthRepository(this) else AuthRepository(this) }
     val catalog: CatalogRepository by lazy { if (isDemo) DemoCatalogRepository(this) else CatalogRepository(this) }
     val cart by lazy { CartRepository(context, json) }

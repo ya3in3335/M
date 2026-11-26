@@ -76,14 +76,6 @@ fun CartScreen(nav: NavHostController, onMenu: () -> Unit) {
     val busy by action.busy.collectAsStateWithLifecycle()
     var note by rememberSaveable { mutableStateOf("") }
     var confirmClear by remember { mutableStateOf(false) }
-    var sellerGroups by remember { mutableStateOf(1) }
-    LaunchedEffect(lines.map { it.sectionId }) {
-        sellerGroups = runCatching {
-            val sections = c.catalog.allSections(force = true).associateBy { it.id }
-            lines.map { l -> l.sectionId?.let { sections[it]?.assignedStaffId } }.distinct().size
-        }.getOrDefault(1)
-    }
-
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         MedkTopBar("السلة", subtitle = if (lines.isNotEmpty()) "${lines.sumOf { it.quantity }} عناصر" else null,
             navigationIcon = { IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, "القائمة") } },
@@ -102,12 +94,12 @@ fun CartScreen(nav: NavHostController, onMenu: () -> Unit) {
             item {
                 MedkTextField(note, { note = it.take(500) }, "ملاحظة للبائع (اختياري) — مثل معرّف اللاعب ID", singleLine = false, minLines = 2)
             }
-            if (sellerGroups > 1) item {
+            if (lines.size > 1) item {
                 Row(Modifier.fillMaxWidth().clip(MedkShapes.Card).background(MedkColors.Info.copy(.12f)).padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Info, null, tint = MedkColors.Info)
                     Spacer(Modifier.width(8.dp))
-                    Text("سلتك تحتوي على منتجات من $sellerGroups بائعين مختلفين، سيتم إنشاء $sellerGroups طلبات منفصلة مع محادثة لكل بائع.",
+                    Text("سيتم إنشاء ${lines.size} طلبات منفصلة (طلب لكل منتج) مع محادثة مع البائع المسؤول عن كل منتج.",
                         style = MaterialTheme.typography.bodySmall)
                 }
             }

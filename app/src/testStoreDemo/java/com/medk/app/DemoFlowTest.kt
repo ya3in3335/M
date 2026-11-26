@@ -66,7 +66,7 @@ class DemoFlowTest {
             kotlinx.coroutines.runBlocking { MedkApp.container.cart.add(p, 1, "Netflix") }
         }
         rule.onNode(androidx.compose.ui.test.hasContentDescription("السلة")).performClick()
-        waitText("الإجمالي"); waitText("بائعين"); shot("06_cart")
+        waitText("الإجمالي"); waitText("طلبات منفصلة"); shot("06_cart")
         val before = DemoStore.orders.size
         rule.onNodeWithText("تواصل مع البائع لإتمام الطلب").performClick()
         waitText("طلب MK-", 10000); shot("07_conversations")

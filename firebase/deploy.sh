@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# MED-K — نشر الخادم على Firebase من Cloud Shell بأمر واحد.
+# MED-K — نشر الخادم على Firebase (الخطة المجانية Spark) من Cloud Shell بأمر واحد.
 # الاستعمال:  bash deploy.sh [PROJECT_ID]
-# المشروع والبريد يُؤخذان تلقائياً من حساب Cloud Shell إن لم تحددهما.
+# لا يحتاج خطة Blaze: ينشر قواعد الحماية والفهارس لقاعدة Firestore فقط.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -16,34 +16,26 @@ OWNER="${OWNER_EMAILS:-$(gcloud config get-value account 2>/dev/null || true)}"
 say "المشروع: $P"
 say "بريد المالك: $OWNER"
 
+# owner e-mails → ['a@x.com','b@y.com'] injected into the security rules
+LIST=$(echo "$OWNER" | tr 'A-Z' 'a-z' | tr -d ' ' | awk -F, '{for(i=1;i<=NF;i++) if($i!="") printf "%s\x27%s\x27", (n++?",":""), $i}')
+sed "s/__OWNER_EMAILS__/[$LIST]/" firestore.rules.tmpl > firestore.rules
 echo "{\"projects\":{\"default\":\"$P\"}}" > .firebaserc
-if [ ! -f "functions/.env.$P" ]; then
-  # App Check is relaxed until the app is registered; set ENFORCE_APP_CHECK=true afterwards.
-  printf 'OWNER_EMAILS=%s\nENFORCE_APP_CHECK=false\n' "$OWNER" > "functions/.env.$P"
-fi
 
-say "1/4 تفعيل الخدمات المطلوبة…"
-gcloud services enable firestore.googleapis.com firebasestorage.googleapis.com cloudfunctions.googleapis.com \
-  cloudbuild.googleapis.com artifactregistry.googleapis.com run.googleapis.com eventarc.googleapis.com \
-  firebaserules.googleapis.com --project "$P" \
-  || die "تعذر تفعيل الخدمات — تأكد أن المشروع على خطة Blaze (الدفع حسب الاستخدام)."
-
-say "2/4 قاعدة البيانات Firestore…"
+say "1/3 قاعدة البيانات Firestore…"
+gcloud services enable firestore.googleapis.com --project "$P" >/dev/null 2>&1 || true
 if ! gcloud firestore databases describe --project "$P" >/dev/null 2>&1; then
-  gcloud firestore databases create --location=europe-west1 --project "$P"
+  gcloud firestore databases create --location=europe-west1 --project "$P" \
+    || die "تعذر إنشاء قاعدة البيانات. أنشئها من Firebase Console ← Firestore Database ← Create database ثم أعد التشغيل."
 fi
-
-say "3/4 تجهيز دوال الخادم…"
-npm ci --prefix functions --no-audit --no-fund
 
 FB="npx -y firebase-tools@13"
+say "2/3 تسجيل الدخول إلى Firebase…"
 if ! $FB projects:list >/dev/null 2>&1; then
-  say "تسجيل الدخول: افتح الرابط، وافق، ثم الصق الرمز هنا"
+  say "افتح الرابط، وافق، ثم الصق الرمز هنا"
   $FB login --no-localhost
 fi
 
-say "4/4 النشر (القواعد + الفهارس + الدوال)… قد يستغرق 3–5 دقائق"
-$FB deploy --only firestore,storage,functions --project "$P" --force \
-  || die "فشل النشر. إذا ظهر خطأ Storage: افتح Firebase Console ← Storage ← Get started ثم أعد تشغيل نفس الأمر."
+say "3/3 نشر قواعد الحماية والفهارس…"
+$FB deploy --only firestore --project "$P" --force || die "فشل النشر — أرسل صورة الخطأ."
 
-say "✅ تم! سجّل الدخول في MED-K Admin ببريدك ($OWNER)."
+say "✅ تم! سجّل الدخول في MED-K Admin ببريدك ($OWNER) بعد تأكيده."

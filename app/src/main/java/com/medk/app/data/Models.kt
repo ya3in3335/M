@@ -191,6 +191,7 @@ data class Conversation(
     @SerialName("last_message") val lastMessage: String? = null,
     @SerialName("last_message_at") val lastMessageAt: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("last_sender_id") val lastSenderId: String? = null,
 )
 
 @Serializable

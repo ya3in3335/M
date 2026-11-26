@@ -21,3 +21,4 @@ firebase/functions/lib/
 firebase/tests/node_modules/
 firebase/.firebaserc
 *-debug.log
+firestore.rules

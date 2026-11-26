@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 
@@ -31,47 +30,94 @@ open class NotificationRepository(private val c: AppContainer) {
     var activeConversationId: String? = null
 
 
-    private fun col(uid: String) = c.firestore.collection("users").document(uid).collection("notifications")
-    private var registration: ListenerRegistration? = null
+    // Free plan: no server writes notifications. They are derived live from the user's
+    // orders and conversations; "read" state is kept on the device.
+    private val prefs by lazy { c.context.getSharedPreferences("medk_notifications", android.content.Context.MODE_PRIVATE) }
+    private var regs = listOf<ListenerRegistration>()
+    private var orderDocs: List<Order> = emptyList()
+    private var convDocs: List<Conversation> = emptyList()
+    private val shown = mutableSetOf<String>()
+    private var startedAt = ""
+    private var uidNow: String? = null
+
+    private fun lastSeen(uid: String) = prefs.getString("seen_$uid", "") ?: ""
+    private fun readIds(uid: String) = prefs.getStringSet("read_$uid", emptySet()) ?: emptySet()
+
+    private fun build(uid: String): List<AppNotification> {
+        val role = c.auth.profile?.roleEnum ?: Role.CUSTOMER
+        val seen = lastSeen(uid); val read = readIds(uid)
+        val fromOrders = orderDocs.mapNotNull { o ->
+            if (role == Role.CUSTOMER) {
+                if (o.status == "open") null
+                else AppNotification("o-${o.id}-${o.status}", uid, "تحديث الطلب ${o.reference}",
+                    "حالة طلبك الآن: ${o.statusEnum.label}", null, o.id, false, o.updatedAt ?: o.createdAt)
+            } else AppNotification("on-${o.id}", uid, if (role == Role.OWNER) "طلب جديد في المتجر" else "طلب جديد",
+                "الطلب ${o.reference} — ${com.medk.app.core.usd(o.totalUsd)}", null, o.id, false, o.createdAt)
+        }
+        val fromChats = convDocs.filter { it.lastMessage != null && it.lastSenderId != null && it.lastSenderId != uid }.map { cv ->
+            AppNotification("c-${cv.id}-${cv.lastMessageAt}", uid, "رسالة جديدة", cv.lastMessage, cv.id, cv.orderId, false, cv.lastMessageAt ?: "")
+        }
+        return (fromOrders + fromChats).sortedByDescending { it.createdAt }.take(100)
+            .map { it.copy(isRead = it.createdAt <= seen || it.id in read) }
+    }
+
+    private fun publish(uid: String) {
+        val list = build(uid)
+        _unread.value = list.count { !it.isRead }
+        list.filter { !it.isRead && it.createdAt > startedAt && shown.add(it.id) }.forEach { n ->
+            if (n.conversationId != null && n.conversationId == activeConversationId) return@forEach
+            c.appScope.launch { if (c.settings.notificationsEnabled.first()) show(n) }
+        }
+    }
+
+    private fun queries(uid: String): Pair<Query, Query> {
+        val orders = c.firestore.collection("orders"); val convs = c.firestore.collection("conversations")
+        return when (c.auth.profile?.roleEnum ?: Role.CUSTOMER) {
+            Role.CUSTOMER -> orders.whereEqualTo("customerId", uid) to convs.whereEqualTo("customerId", uid)
+            Role.STAFF -> orders.whereEqualTo("staffId", uid) to convs.whereEqualTo("staffId", uid)
+            Role.OWNER -> orders to convs
+        }.let { (o, cv) -> o.orderBy("createdAt", Query.Direction.DESCENDING).limit(50) to
+            cv.orderBy("lastMessageAt", Query.Direction.DESCENDING).limit(50) }
+    }
 
     open suspend fun list(): List<AppNotification> {
         val uid = c.auth.currentUid ?: return emptyList()
-        val l = col(uid).orderBy("createdAt", Query.Direction.DESCENDING).limit(100).get().await().documents.map { it.toNotification(uid) }
-        _unread.value = l.count { !it.isRead }
-        return l
+        if (regs.isEmpty()) {
+            val (oq, cq) = queries(uid)
+            orderDocs = oq.get().await().documents.map { it.toOrder() }
+            convDocs = cq.get().await().documents.map { it.toConversation() }
+        }
+        return build(uid).also { l -> _unread.value = l.count { !it.isRead } }
     }
 
     open suspend fun markAllRead() {
         val uid = c.auth.currentUid ?: return
-        val unread = col(uid).whereEqualTo("read", false).limit(400).get().await()
-        if (!unread.isEmpty) c.firestore.batch().apply { unread.documents.forEach { update(it.reference, "read", true) } }.commit().await()
+        prefs.edit().putString("seen_$uid", java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString())
+            .putStringSet("read_$uid", emptySet()).apply()
         _unread.value = 0
     }
 
     open suspend fun markRead(id: String) {
         val uid = c.auth.currentUid ?: return
-        col(uid).document(id).update("read", true).await()
+        prefs.edit().putStringSet("read_$uid", readIds(uid) + id).apply()
         _unread.value = (_unread.value - 1).coerceAtLeast(0)
     }
 
-    /** Listens for new notifications while the app is running and shows them as system notifications. */
+    /** Live listeners on the user's orders and conversations (system notifications for new events). */
     open fun start(uid: String) {
         stop()
-        var first = true
-        registration = col(uid).orderBy("createdAt", Query.Direction.DESCENDING).limit(30).addSnapshotListener { snap, err ->
-            if (err != null || snap == null) return@addSnapshotListener
-            _unread.value = snap.documents.count { it.getBoolean("read") == false }
-            if (first) { first = false; return@addSnapshotListener }
-            snap.documentChanges.filter { it.type == DocumentChange.Type.ADDED && !it.document.metadata.hasPendingWrites() }.forEach { ch ->
-                val n = ch.document.toNotification(uid)
-                if (n.conversationId != null && n.conversationId == activeConversationId) return@forEach
-                c.appScope.launch { if (c.settings.notificationsEnabled.first()) show(n) }
-            }
-        }
+        uidNow = uid
+        startedAt = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString()
+        val (oq, cq) = queries(uid)
+        regs = listOf(
+            oq.addSnapshotListener { s, e -> if (e == null && s != null) { orderDocs = s.documents.map { it.toOrder() }; publish(uid) } },
+            cq.addSnapshotListener { s, e -> if (e == null && s != null) { convDocs = s.documents.map { it.toConversation() }; publish(uid) } },
+        )
     }
 
     open fun stop() {
-        registration?.remove(); registration = null
+        regs.forEach { it.remove() }; regs = emptyList()
+        orderDocs = emptyList(); convDocs = emptyList(); shown.clear(); uidNow = null
         _unread.value = 0
     }
 

@@ -15,6 +15,7 @@ import com.google.firebase.auth.userProfileChangeRequest
 import com.medk.app.BuildConfig
 import com.medk.app.core.AppContainer
 import com.medk.app.core.friendly
+import com.google.firebase.firestore.FieldValue
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,6 +31,9 @@ sealed interface AuthState {
 }
 
 class GoogleSignInCancelled : Exception("cancelled")
+
+internal val DEFAULT_PERMS = mapOf("manageProducts" to false, "updateOrders" to true, "manageP2p" to false, "viewStats" to false)
+internal val OWNER_PERMS = mapOf("manageProducts" to true, "updateOrders" to true, "manageP2p" to true, "viewStats" to true)
 
 /** Firebase Authentication (email/password + Google) bridged to the MED-K backend profile. */
 open class AuthRepository(private val c: AppContainer) {
@@ -50,20 +54,94 @@ open class AuthRepository(private val c: AppContainer) {
     open suspend fun restore() {
         _state.value = AuthState.Loading
         _state.value = runCatching { AuthState.SignedIn(bootstrap(null)) }.getOrElse { e ->
-            if (e.message?.contains("account_disabled") == true || e.message?.contains("unauthenticated", true) == true) {
+            if (e.message?.contains("account_disabled") == true) {
                 c.firebaseAuth?.signOut(); AuthState.SignedOut
             } else AuthState.Failed(e.friendly())
         }
     }
 
-    /** Server-side bootstrap (Cloud Function): creates the profile and syncs the role claim. */
+    /**
+     * Free plan (no server): creates/loads users/{uid}. The security rules decide what is allowed —
+     * a profile can only be created as "customer", or as "owner" for a verified owner e-mail.
+     */
     private suspend fun bootstrap(fullName: String?): Profile {
-        val res = c.cloud.call("bootstrap", if (fullName != null) mapOf("full_name" to fullName) else emptyMap())
-        if (res["claims_updated"] == true) c.firebaseAuth?.currentUser?.getIdToken(true)?.await()
-        @Suppress("UNCHECKED_CAST")
-        val p = profileFromFunction(res["profile"] as Map<String, Any?>)
+        val user = c.firebaseAuth?.currentUser ?: error("not signed in")
+        val db = c.firestore
+        val ref = db.collection("users").document(user.uid)
+        var snap = ref.get(com.google.firebase.firestore.Source.SERVER).await()
+        val verified = user.isEmailVerified
+        if (!snap.exists()) {
+            fun profile(role: String, perms: Map<String, Boolean>) = mapOf(
+                "email" to user.email, "fullName" to (fullName ?: user.displayName)?.take(80), "avatarUrl" to user.photoUrl?.toString(),
+                "role" to role, "active" to true, "perms" to perms, "sections" to emptyList<String>(),
+                "createdAt" to FieldValue.serverTimestamp(), "updatedAt" to FieldValue.serverTimestamp())
+            val ownerTry = verified && runCatching { ref.set(profile("owner", OWNER_PERMS)).await() }.isSuccess
+            if (!ownerTry) ref.set(profile("customer", DEFAULT_PERMS)).await()
+            ownerProbeDone(user.uid)
+            snap = ref.get(com.google.firebase.firestore.Source.SERVER).await()
+        } else if (snap.getString("role") == "customer" && verified && !isOwnerProbeDone(user.uid)) {
+            // owner who signed up with a password: promoted once the e-mail is verified (rules check the list)
+            runCatching { ref.update(mapOf("role" to "owner", "perms" to OWNER_PERMS, "updatedAt" to FieldValue.serverTimestamp())).await() }
+            ownerProbeDone(user.uid)
+            snap = ref.get(com.google.firebase.firestore.Source.SERVER).await()
+        }
+        val p = snap.toProfile()
+        if (!p.isActive) error("account_disabled")
+        runCatching {
+            db.collection("publicProfiles").document(p.id)
+                .set(mapOf("displayName" to p.fullName, "avatarUrl" to p.avatarUrl, "role" to p.role)).await()
+        }
+        if (p.roleEnum == Role.OWNER) runCatching { seedCatalogIfEmpty() }
         c.notifications.start(p.id)
         return p
+    }
+
+    private val probePrefs by lazy { c.context.getSharedPreferences("medk_owner_probe", android.content.Context.MODE_PRIVATE) }
+    private fun isOwnerProbeDone(uid: String) = probePrefs.getBoolean(uid, false)
+    private fun ownerProbeDone(uid: String) { if (c.firebaseAuth?.currentUser?.isEmailVerified == true) probePrefs.edit().putBoolean(uid, true).apply() }
+
+    /** First owner sign-in: the five fixed categories and their sections (structure only, no products). */
+    private suspend fun seedCatalogIfEmpty() {
+        val db = c.firestore
+        if (!db.collection("categories").limit(1).get().await().isEmpty) return
+        val cats = listOf(
+            Triple("gaming", "شحن الألعاب", "جواهر، شدات، عملات داخل الألعاب") to "orange",
+            Triple("subscriptions", "اشتراكات التطبيقات", "Netflix - YouTube - Spotify وأكثر") to "blue",
+            Triple("accounts", "شراء الحسابات", "حسابات الألعاب والتطبيقات") to "purple",
+            Triple("p2p", "شراء وبيع العملات الرقمية P2P", "USDT والعملات الرقمية المدعومة") to "green",
+            Triple("other", "خدمات أخرى", "بطاقات الهدايا، تراخيص البرامج، VPN والخدمات الرقمية المتنوعة") to "cyan",
+        )
+        val sections = mapOf(
+            "gaming" to listOf("Free Fire", "PUBG Mobile", "Call of Duty Mobile", "Roblox", "ألعاب أخرى"),
+            "subscriptions" to listOf("Netflix", "YouTube Premium", "Spotify", "تطبيقات أخرى"),
+            "accounts" to listOf("حسابات الألعاب", "حسابات التطبيقات"),
+            "p2p" to listOf("العملات الرقمية"),
+            "other" to listOf("بطاقات الهدايا", "Google Play", "Apple Gift Card", "تراخيص البرامج", "اشتراكات VPN", "منتجات رقمية أخرى"),
+        )
+        val batch = db.batch()
+        cats.forEachIndexed { i, (t, color) ->
+            batch.set(db.collection("categories").document(t.first), mapOf("slug" to t.first, "name" to t.second, "description" to t.third,
+                "colorKey" to color, "iconKey" to t.first, "sortOrder" to i + 1, "active" to true))
+        }
+        batch.commit().await()   // categories must exist before sections reference them
+        val b2 = db.batch()
+        sections.forEach { (cat, names) -> names.forEachIndexed { i, n ->
+            b2.set(db.collection("sections").document(), mapOf("categoryId" to cat, "name" to n, "description" to null, "imageUrl" to null,
+                "assignedStaffId" to null, "sortOrder" to i + 1, "active" to true, "createdAt" to FieldValue.serverTimestamp()))
+        } }
+        b2.commit().await()
+        c.catalog.invalidate()
+    }
+
+    /** Ordering requires a verified e-mail (anti-spam). Re-checks with the server and refreshes the token. */
+    open suspend fun ensureEmailVerified() {
+        val user = c.firebaseAuth?.currentUser ?: error("not signed in")
+        if (user.isEmailVerified) return
+        user.reload().await()
+        val u = c.firebaseAuth?.currentUser ?: error("not signed in")
+        if (u.isEmailVerified) { u.getIdToken(true).await(); return }
+        runCatching { u.sendEmailVerification().await() }
+        error("email_not_verified")
     }
 
     open suspend fun signIn(email: String, password: String) {
