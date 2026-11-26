@@ -46,14 +46,18 @@ ok "تم"
 say "3/6 حساب الخدمة medk-push…"
 gcloud iam service-accounts describe "$SA" --project "$P" >/dev/null 2>&1 \
   || gcloud iam service-accounts create medk-push --display-name "MED-K push server" --project "$P" >/dev/null
+# حساب الخدمة الجديد يحتاج بضع ثوانٍ ليصبح معروفاً في كل أنظمة جوجل → ننتظر ونعيد المحاولة.
+retry() { local i; for i in $(seq 1 12); do "$@" >/dev/null 2>&1 && return 0; printf '.'; sleep 10; done; "$@"; }
 for role in roles/datastore.user roles/firebasecloudmessaging.admin; do
-  gcloud projects add-iam-policy-binding "$P" --member "serviceAccount:$SA" --role "$role" --condition=None >/dev/null
+  retry gcloud projects add-iam-policy-binding "$P" --member "serviceAccount:$SA" --role "$role" --condition=None \
+    || die "تعذر إعطاء الصلاحية $role. أعد تشغيل نفس الأمر بعد دقيقة."
 done
+echo
 # مفتاح واحد فقط نشط: نحذف المفاتيح القديمة لهذا الحساب
 for k in $(gcloud iam service-accounts keys list --iam-account "$SA" --managed-by=user --format='value(name)' 2>/dev/null); do
   gcloud iam service-accounts keys delete "$k" --iam-account "$SA" --quiet >/dev/null 2>&1 || true
 done
-gcloud iam service-accounts keys create "$TMP/key.json" --iam-account "$SA" >/dev/null 2>&1 \
+retry gcloud iam service-accounts keys create "$TMP/key.json" --iam-account "$SA" \
   || die "تعذر إنشاء مفتاح حساب الخدمة. أرسل صورة الخطأ."
 ok "تم"
 
