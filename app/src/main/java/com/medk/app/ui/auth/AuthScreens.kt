@@ -231,9 +231,8 @@ private fun GoogleButton(loading: Boolean, enabled: Boolean, onClick: () -> Unit
         Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             if (loading) androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MedkColors.Violet)
             else {
-                Box(Modifier.size(20.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
-                    Text("G", color = Color(0xFF4285F4), fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
-                }
+                Icon(androidx.compose.ui.res.painterResource(com.medk.app.R.drawable.ic_google), contentDescription = "Google",
+                    tint = Color.Unspecified, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("المتابعة باستخدام Google", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
             }
