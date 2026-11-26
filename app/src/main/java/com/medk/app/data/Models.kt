@@ -175,35 +175,31 @@ data class Order(
     @SerialName("delivered_at") val deliveredAt: String? = null,
     @SerialName("closed_at") val closedAt: String? = null,
     @SerialName("order_items") val items: List<OrderItem> = emptyList(),
-    val payment: PaymentInfo? = null,
+    val commissionPct: Double? = null,
+    val paymentClaim: PaymentClaim? = null,
 ) {
     val statusEnum get() = OrderStatus.of(status)
 }
 
-/** In-app USDT payment of an order (written only by the payment server). */
-@Serializable
-data class PaymentInfo(
-    val status: String, val invoiceUrl: String? = null, val amountUsd: Double = 0.0,
-    val paidUsd: Double? = null, val feeUsd: Double? = null, val commissionUsd: Double? = null,
-    val commissionPct: Double? = null, val sellerUsd: Double? = null,
-) {
-    val isFinished get() = status == "finished"
-    val label get() = when (status) {
-        "waiting" -> "بانتظار الدفع"; "confirming", "confirmed", "sending" -> "قيد التأكيد على الشبكة"
-        "partially_paid" -> "دفع ناقص"; "finished" -> "مدفوع بـ USDT"; "failed" -> "فشل الدفع"
-        "expired" -> "انتهت صلاحية الفاتورة"; "refunded" -> "مُسترجع"; else -> status
+/** A manual way to pay a seller (BaridiMob, CCP, RedotPay…), shown to customers on their order. */
+data class PaymentMethod(val type: String, val title: String, val account: String, val holder: String? = null, val note: String? = null) {
+    companion object {
+        val TYPES = listOf("baridimob" to "بريدي موب (RIP)", "ccp" to "CCP بريد الجزائر", "redotpay" to "RedotPay",
+            "binance" to "Binance Pay", "usdt" to "USDT (TRC20)", "other" to "أخرى")
+        fun typeLabel(t: String) = TYPES.firstOrNull { it.first == t }?.second ?: t
     }
 }
-
-data class Wallet(val balanceUsd: Double = 0.0, val earnedUsd: Double = 0.0)
-data class WalletEntry(val id: String, val type: String, val amountUsd: Double, val reference: String?, val createdAt: String) {
-    val label get() = when (type) { "sale" -> "بيع"; "commission" -> "عمولة"; "withdraw" -> "سحب"; "refund" -> "استرجاع سحب"; else -> type }
+@Serializable
+data class PaymentClaim(val method: String, val at: String)
+data class Invite(val email: String, val name: String?, val perms: StaffPermissions, val sections: List<String>,
+                  val createdAt: String, val acceptedBy: String?)
+data class Settlement(val id: String, val sellerId: String, val amountDzd: Double, val amountUsd: Double, val note: String?, val createdAt: String)
+/** What a seller owes the app: commission on confirmed orders minus what he already paid. */
+data class CommissionSummary(val confirmedOrders: Int, val salesDzd: Double, val salesUsd: Double,
+                             val commissionDzd: Double, val commissionUsd: Double, val paidDzd: Double, val paidUsd: Double) {
+    val dueDzd get() = (commissionDzd - paidDzd).coerceAtLeast(0.0)
+    val dueUsd get() = (commissionUsd - paidUsd).coerceAtLeast(0.0)
 }
-data class Withdrawal(val id: String, val uid: String, val name: String, val amountUsd: Double, val address: String,
-                      val status: String, val txid: String?, val createdAt: String) {
-    val label get() = when (status) { "pending" -> "قيد المراجعة"; "paid" -> "تم التحويل"; "rejected" -> "مرفوض"; else -> status }
-}
-data class PaymentsConfig(val enabled: Boolean = true, val commissionPct: Double = 10.0)
 
 @Serializable
 data class Conversation(

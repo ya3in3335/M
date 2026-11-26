@@ -41,6 +41,9 @@ open class OrderRepository(private val c: AppContainer) {
         if (status != OrderStatus.OPEN && o.paidAt == null) patch["paidAt"] = now
         if ((status == OrderStatus.DELIVERED || status == OrderStatus.CLOSED) && o.deliveredAt == null) patch["deliveredAt"] = now
         if (status == OrderStatus.CLOSED) patch["closedAt"] = now
+        // app commission % is stamped once, the first time the order is confirmed (checked by the rules)
+        if (status != OrderStatus.OPEN && o.commissionPct == null && c.firebaseConfigured)
+            patch["commissionPct"] = runCatching { c.payments.commissionPct() }.getOrDefault(0.0)
         db.collection("orders").document(orderId).update(patch).await()
         c.push.notify("status", "orderId" to orderId)
     }

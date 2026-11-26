@@ -44,6 +44,18 @@ service cloud.firestore {
         && p.manageProducts is bool && p.updateOrders is bool && p.manageP2p is bool && p.viewStats is bool;
     }
 
+    // Seller invitations: the owner pre-approves an e-mail with permissions + sections.
+    function tokenEmail() { return request.auth.token.get('email', '').lower(); }
+    function invitePath() { return /databases/$(database)/documents/invites/$(tokenEmail()); }
+    // invite consumed in THIS batch by the current user (one-time use)
+    function acceptingInvite() {
+      return signedIn() && verified() && tokenEmail() != '' && exists(invitePath())
+        && get(invitePath()).data.acceptedBy == null && getAfter(invitePath()).data.acceptedBy == uid();
+    }
+    function matchesInvite() {
+      return d().role == 'staff' && d().perms == get(invitePath()).data.perms && d().sections == get(invitePath()).data.sections;
+    }
+
     function conv(cid) { return get(/databases/$(database)/documents/conversations/$(cid)).data; }
     // state after the current batch (a conversation and its first message are written together)
     function convAfter(cid) { return getAfter(/databases/$(database)/documents/conversations/$(cid)).data; }
@@ -70,12 +82,17 @@ service cloud.firestore {
           (userId == uid() && d().email == request.auth.token.get('email', null)
             && ((d().role == 'customer' && defaultPerms(d().perms) && d().sections.size() == 0)
                 || (d().role == 'owner' && isOwnerEmail())))
-          || (userId != uid() && isOwner() && d().role == 'staff' && validPerms(d().perms) && str(d().email, 120)));
+          || (userId != uid() && isOwner() && d().role == 'staff' && validPerms(d().perms) && str(d().email, 120))
+          // 3) an invited e-mail signs up: seller with exactly the permissions the owner chose
+          || (userId == uid() && d().email == request.auth.token.get('email', null) && acceptingInvite() && matchesInvite()));
 
       allow update: if
           // own display fields
           (active() && userId == uid() && changed().hasOnly(['fullName', 'avatarUrl', 'updatedAt'])
             && str(d().fullName, 80) && img(d().get('avatarUrl', null)) && now(d().updatedAt))
+          // an existing customer whose e-mail was invited becomes a seller (once)
+          || (active() && userId == uid() && resource.data.role == 'customer' && acceptingInvite()
+            && changed().hasOnly(['role', 'perms', 'sections', 'updatedAt']) && matchesInvite() && now(d().updatedAt))
           // owner e-mail promoted after verification
           || (userId == uid() && resource.data.role == 'customer' && isOwnerEmail()
             && changed().hasOnly(['role', 'perms', 'updatedAt']) && d().role == 'owner' && validPerms(d().perms))
@@ -128,6 +145,25 @@ service cloud.firestore {
     match /sections/{id} {
       allow read: if true;
       allow create, update: if isOwner() && validSection(d());
+      // while accepting an invitation, the new seller becomes responsible for his still-unassigned sections
+      allow update: if acceptingInvite() && changed().hasOnly(['assignedStaffId'])
+        && resource.data.get('assignedStaffId', null) == null && d().assignedStaffId == uid()
+        && id in get(invitePath()).data.sections && getAfter(userPath(uid())).data.role == 'staff';
+      allow delete: if isOwner();
+    }
+
+    match /invites/{email} {
+      allow get: if isOwner() || (signedIn() && verified() && email == tokenEmail());
+      allow list: if isOwner();
+      allow create, update: if isOwner()
+        && d().keys().hasOnly(['email', 'name', 'perms', 'sections', 'createdBy', 'createdAt', 'acceptedBy', 'acceptedAt'])
+        && d().email == email && email.matches('[^@ ]+@[^@ ]+[.][^@ ]+') && email == email.lower()
+        && optStr(d().get('name', null), 80) && validPerms(d().perms)
+        && d().sections is list && d().sections.size() <= 200
+        && d().createdBy == uid() && now(d().createdAt) && d().acceptedBy == null && d().acceptedAt == null
+        && (resource == null || resource.data.acceptedBy == null);
+      allow update: if signedIn() && verified() && email == tokenEmail() && resource.data.acceptedBy == null
+        && changed().hasOnly(['acceptedBy', 'acceptedAt']) && d().acceptedBy == uid() && now(d().acceptedAt);
       allow delete: if isOwner();
     }
 
@@ -224,15 +260,29 @@ service cloud.firestore {
         && (d().deliveredAt == resource.data.get('deliveredAt', null) || now(d().deliveredAt))
         && (d().closedAt == resource.data.get('closedAt', null) || now(d().closedAt));
     }
+    function cfgPath() { return /databases/$(database)/documents/config/payments; }
+    function cfgPct() { return exists(cfgPath()) ? get(cfgPath()).data.get('commissionPct', 0) : 0; }
+    // The app commission % is stamped once, when an order first leaves "open", with the owner's current rate.
+    function commissionOk() {
+      let before = resource.data.get('commissionPct', null);
+      let after = d().get('commissionPct', null);
+      return after == before ? (before != null || d().status == 'open') : (before == null && after == cfgPct());
+    }
     match /orders/{id} {
       allow read: if active() && (resource.data.customerId == uid()
         || (isStaff() && resource.data.staffId == uid()) || isOwner());
       allow create: if active() && verified() && validNewOrder();
       allow update: if timestampsOk() && d().status in ['open', 'paid', 'delivered', 'closed'] && (
-          (isOwner() && changed().hasOnly(['status', 'staffId', 'updatedAt', 'paidAt', 'deliveredAt', 'closedAt'])
+          (isOwner() && changed().hasOnly(['status', 'staffId', 'updatedAt', 'paidAt', 'deliveredAt', 'closedAt', 'commissionPct'])
+            && commissionOk()
             && (d().get('staffId', null) == null || get(userPath(d().staffId)).data.role in ['staff', 'owner']))
           || (isStaff() && resource.data.staffId == uid() && perm('updateOrders')
-            && changed().hasOnly(['status', 'updatedAt', 'paidAt', 'deliveredAt', 'closedAt'])));
+            && changed().hasOnly(['status', 'updatedAt', 'paidAt', 'deliveredAt', 'closedAt', 'commissionPct'])
+            && commissionOk())
+          // the customer declares he sent a manual payment (the seller still confirms it)
+          || (active() && resource.data.customerId == uid() && resource.data.status == 'open' && d().status == 'open'
+            && changed().hasOnly(['paymentClaim', 'updatedAt'])
+            && d().paymentClaim.keys().hasOnly(['method', 'at']) && str(d().paymentClaim.method, 60) && now(d().paymentClaim.at)));
       allow delete: if false;
     }
 
@@ -302,27 +352,33 @@ service cloud.firestore {
     }
 
     // Public app configuration. config/push is written only by the setup script (admin);
-    // config/payments (commission %, on/off) is edited by the owner from the control panel.
+    // config/payments holds the app commission % and is edited by the owner.
     match /config/{id} {
       allow read: if signedIn();
       allow write: if id == 'payments' && isOwner()
-        && d().keys().hasOnly(['commissionPct', 'enabled', 'updatedAt'])
-        && d().commissionPct is number && d().commissionPct >= 0 && d().commissionPct <= 50
-        && d().enabled is bool && now(d().updatedAt);
+        && d().keys().hasOnly(['commissionPct', 'updatedAt'])
+        && (d().commissionPct is int || d().commissionPct is float)
+        && d().commissionPct >= 0 && d().commissionPct <= 50 && now(d().updatedAt);
     }
 
-    // Money (USDT payments): balances, history and withdrawals are written ONLY by the payment server.
-    match /wallets/{wid} {
-      allow read: if active() && (wid == uid() || isOwner());
-      allow write: if false;
-      match /entries/{eid} {
-        allow read: if active() && (wid == uid() || isOwner());
-        allow write: if false;
-      }
+    // Manual payment methods shown to customers: one document per seller (own uid) + "store" (owner, unassigned orders).
+    match /paymentMethods/{id} {
+      allow read: if active();
+      allow write: if ((id == uid() && isStaff()) || (id == 'store' && isOwner()))
+        && d().keys().hasOnly(['methods', 'updatedAt']) && d().methods is list && d().methods.size() <= 8
+        && now(d().updatedAt);
     }
-    match /withdrawals/{id} {
-      allow read: if active() && (resource.data.uid == uid() || isOwner());
-      allow write: if false;
+
+    // Commission payments a seller made to the app owner (recorded by the owner).
+    match /settlements/{sid} {
+      allow read: if isOwner() || (isStaff() && resource.data.sellerId == uid());
+      allow create: if isOwner()
+        && d().keys().hasOnly(['sellerId', 'amountDzd', 'amountUsd', 'note', 'createdBy', 'createdAt'])
+        && get(userPath(d().sellerId)).data.role == 'staff'
+        && money(d().amountDzd) && money(d().amountUsd) && (d().amountDzd > 0 || d().amountUsd > 0)
+        && optStr(d().get('note', null), 200) && d().createdBy == uid() && now(d().createdAt);
+      allow delete: if isOwner();
+      allow update: if false;
     }
 
     match /{document=**} {

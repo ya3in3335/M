@@ -22,13 +22,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -115,7 +116,8 @@ fun OrdersScreen(nav: NavHostController) {
     }
 }
 
-data class OrderDetail(val order: Order, val seller: Profile?, val customer: Profile?, val conversationId: String?, val staff: List<Profile>)
+data class OrderDetail(val order: Order, val seller: Profile?, val customer: Profile?, val conversationId: String?, val staff: List<Profile>,
+                       val methods: List<com.medk.app.data.PaymentMethod> = emptyList())
 
 @Composable
 fun OrderDetailScreen(id: String, nav: NavHostController) {
@@ -128,7 +130,8 @@ fun OrderDetailScreen(id: String, nav: NavHostController) {
         val people = c.chat.profiles(listOfNotNull(o.staffId, o.customerId))
         val conv = runCatching { c.chat.conversationForOrder(id)?.id }.getOrNull()
         val staff = if (isOwner) runCatching { c.admin.staff().filter { it.isActive } }.getOrDefault(emptyList()) else emptyList()
-        OrderDetail(o, o.staffId?.let { people[it] }, people[o.customerId], conv, staff)
+        val methods = if (c.payments.available) runCatching { c.payments.methodsForOrder(o) }.getOrDefault(emptyList()) else emptyList()
+        OrderDetail(o, o.staffId?.let { people[it] }, people[o.customerId], conv, staff, methods)
     }
     LifecycleResumeEffect(Unit) { vm.load(silent = true); onPauseOrDispose { } }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -195,32 +198,8 @@ fun OrderDetailScreen(id: String, nav: NavHostController) {
                         }
                     }
                 }
-                // ---- in-app USDT payment
-                val pay = o.payment
-                val ctx = androidx.compose.ui.platform.LocalContext.current
-                if (pay != null || (!isTeam && st == OrderStatus.OPEN && c.payments.available)) MedkCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("الدفع داخل التطبيق (USDT)", style = MaterialTheme.typography.titleSmall)
-                        if (pay != null) InfoRow("حالة الدفع", pay.label,
-                            valueColor = if (pay.isFinished) MedkColors.Success else MedkColors.Warning)
-                        if (pay?.isFinished == true && isTeam) {
-                            InfoRow("المبلغ المدفوع", usd(pay.paidUsd ?: 0.0))
-                            InfoRow("رسوم البوابة", usd(pay.feeUsd ?: 0.0))
-                            InfoRow("عمولة التطبيق${pay.commissionPct?.let { " (${"%.1f".format(java.util.Locale.US, it)}%)" } ?: ""}", usd(pay.commissionUsd ?: 0.0))
-                            InfoRow("حصة البائع", usd(pay.sellerUsd ?: 0.0), valueColor = MedkColors.Success)
-                        }
-                        if (!isTeam && st == OrderStatus.OPEN && pay?.isFinished != true) {
-                            Text("ادفع ${usd(o.totalUsd)} بعملة USDT (شبكة TRC20). تتأكد العملية تلقائياً خلال دقائق.",
-                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            PrimaryButton(if (pay == null) "ادفع الآن بـ USDT" else "متابعة الدفع", {
-                                action.run(toast) {
-                                    val url = c.payments.invoiceUrl(o.id)
-                                    ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
-                                }
-                            }, loading = busy, icon = Icons.Filled.Paid)
-                        }
-                    }
-                }
+                // ---- manual payment (customer → seller's account)
+                ManualPaymentCard(d, isTeam, onChanged = { vm.load(silent = true) }, onOpenChat = { d.conversationId?.let { nav.navigate(Routes.chat(it)) } })
                 if (d.conversationId != null) PrimaryButton("فتح المحادثة", { nav.navigate(Routes.chat(d.conversationId)) },
                     icon = Icons.AutoMirrored.Filled.Chat)
 
@@ -255,6 +234,91 @@ fun OrderDetailScreen(id: String, nav: NavHostController) {
                     }
                 }
                 Spacer(Modifier.height(12.dp))
+            }
+        }
+    }
+}
+
+
+/**
+ * Customer: the seller's payment methods (copyable) + "I sent the money" (receipt image goes to the order chat).
+ * Team: what the customer declared and the commission stamped at confirmation.
+ */
+@Composable
+private fun ManualPaymentCard(d: OrderDetail, isTeam: Boolean, onChanged: () -> Unit, onOpenChat: () -> Unit) {
+    val c = MedkApp.container
+    val o = d.order
+    val st = o.statusEnum
+    val toast = LocalToast.current
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val action = actionVm("claim-${o.id}")
+    val busy by action.busy.collectAsStateWithLifecycle()
+    var chosen by remember { mutableStateOf<com.medk.app.data.PaymentMethod?>(null) }
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri ->
+        val m = chosen ?: return@rememberLauncherForActivityResult
+        if (uri == null) return@rememberLauncherForActivityResult
+        action.run(toast, { toast("تم إرسال الوصل، البائع سيتحقق ويؤكد الدفع"); onChanged() }) {
+            val conv = d.conversationId ?: error("لا توجد محادثة لهذا الطلب")
+            c.chat.sendAttachment(conv, uri, "💵 وصل الدفع للطلب ${o.reference} عبر ${m.title}")
+            c.payments.claimPayment(o.id, m.title)
+        }
+    }
+    if (!c.payments.available) return
+    if (isTeam) {
+        if (o.paymentClaim == null && o.commissionPct == null) return
+        MedkCard {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("الدفع", style = MaterialTheme.typography.titleSmall)
+                o.paymentClaim?.let {
+                    InfoRow("العميل أعلن الدفع عبر", it.method, valueColor = MedkColors.Warning)
+                    if (it.at.isNotBlank()) InfoRow("بتاريخ", formatDateTime(it.at))
+                    if (st == OrderStatus.OPEN) Text("تحقّق من وصول المبلغ إلى حسابك (الوصل في المحادثة) ثم اضغط «تم الدفع».",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                o.commissionPct?.let { pct ->
+                    InfoRow("عمولة التطبيق (${"%.1f".format(java.util.Locale.US, pct)}%)",
+                        "${dzd(o.totalDzd * pct / 100)} • ${usd(o.totalUsd * pct / 100)}")
+                }
+            }
+        }
+        return
+    }
+    if (st != OrderStatus.OPEN) return
+    MedkCard {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("طريقة الدفع", style = MaterialTheme.typography.titleSmall)
+            if (o.paymentClaim != null) {
+                InfoRow("أعلنت الدفع عبر", o.paymentClaim.method, valueColor = MedkColors.Warning)
+                Text("بانتظار تأكيد البائع لوصول المبلغ.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (d.methods.isEmpty()) {
+                Text("لم يُضف البائع طرق دفع بعد. تواصل معه في المحادثة لمعرفة طريقة الدفع.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SecondaryButton("فتح المحادثة", onOpenChat, height = 40.dp)
+                return@Column
+            }
+            Text("حوّل ${dzd(o.totalDzd)} (أو ${usd(o.totalUsd)}) إلى أحد حسابات البائع، ثم أرسل صورة الوصل:",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            d.methods.forEach { m ->
+                Surface(shape = MedkShapes.Small, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                    Column(Modifier.fillMaxWidth().padding(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(m.title, style = MaterialTheme.typography.titleSmall, color = MedkColors.Violet)
+                                Text(m.account, style = MaterialTheme.typography.bodyMedium)
+                                m.holder?.let { Text("باسم: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                m.note?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            }
+                            TextButton({ clipboard.setText(androidx.compose.ui.text.AnnotatedString(m.account)); toast("تم النسخ") }) { Text("نسخ") }
+                        }
+                        SecondaryButton("أرسلت المبلغ عبر ${m.title} — رفع الوصل", {
+                            chosen = m
+                            picker.launch(androidx.activity.result.PickVisualMediaRequest(
+                                androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        }, enabled = !busy, height = 40.dp, color = MedkColors.Success)
+                    }
+                }
             }
         }
     }

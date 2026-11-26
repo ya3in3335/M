@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Groups
@@ -275,16 +276,44 @@ fun AdminSectionsScreen(nav: NavHostController) {
 @Composable
 fun AdminStaffScreen(nav: NavHostController) {
     val c = MedkApp.container
-    val vm = loadVm("admin-staff") { c.admin.staff() }
+    val vm = loadVm("admin-staff") {
+        coroutineScope {
+            val staff = async { c.admin.staff() }
+            val inv = async { runCatching { c.admin.invites() }.getOrDefault(emptyList()) }
+            val cats = async { c.catalog.categories(force = true) }
+            val secs = async { c.catalog.allSections(force = true) }
+            StaffListData(staff.await(), inv.await().filter { it.acceptedBy == null }, cats.await(), secs.await())
+        }
+    }
     val state by vm.state.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
     val action = actionVm("staff-create")
     val busy by action.busy.collectAsStateWithLifecycle()
     val toast = LocalToast.current
-    ManageScaffold("البائعون والصلاحيات", nav, "بائع جديد", { creating = true }) {
-        StateView(state, { vm.load() }) { list ->
-            if (list.isEmpty()) EmptyBox(Icons.Filled.Groups, "لا يوجد بائعون")
-            else LazyColumn(contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 96.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    ManageScaffold("البائعون والصلاحيات", nav, "دعوة بائع", { creating = true }) {
+        StateView(state, { vm.load() }) { data ->
+            val list = data.staff
+            LazyColumn(contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 96.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (data.invites.isNotEmpty()) {
+                    item { Text("دعوات بانتظار التسجيل", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    items(data.invites, key = { "inv-" + it.email }) { inv ->
+                        MedkCard(padding = PaddingValues(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(inv.name ?: inv.email, style = MaterialTheme.typography.titleSmall)
+                                    Text(inv.email, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(sectionSummary(inv.sections, data.categories, data.sections), style = MaterialTheme.typography.labelSmall, color = MedkColors.Violet)
+                                }
+                                Pill("بانتظار التسجيل", MedkColors.Warning)
+                                IconButton({
+                                    action.run(toast, { toast("تم حذف الدعوة"); vm.load(silent = true) }) { c.admin.deleteInvite(inv.email) }
+                                }) { Icon(Icons.Filled.Delete, "حذف الدعوة", tint = MedkColors.Danger) }
+                            }
+                        }
+                    }
+                    item { Text("البائعون", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+                if (list.isEmpty()) item { EmptyBox(Icons.Filled.Groups, "لا يوجد بائعون", "اضغط «دعوة بائع» وأدخل بريده: عند تسجيله يصبح بائعاً تلقائياً.") }
                 items(list, key = { it.id }) { p ->
                     MedkCard(onClick = if (p.roleEnum == Role.STAFF) ({ nav.navigate(Routes.staffDetail(p.id)) }) else null, padding = PaddingValues(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -307,22 +336,65 @@ fun AdminStaffScreen(nav: NavHostController) {
         }
     }
     if (creating) {
+        val d = (state as? com.medk.app.core.UiState.Success)?.data
         var name by remember { mutableStateOf("") }
         var email by remember { mutableStateOf("") }
-        var pass by remember { mutableStateOf("") }
-        var perms by remember { mutableStateOf(StaffPermissions()) }
-        FormDialog("إضافة بائع", busy, name.isNotBlank() && email.contains('@') && pass.length >= 8, { creating = false }, {
-            action.run(toast, { creating = false; toast("تم إنشاء حساب البائع"); vm.load(silent = true) }) {
-                c.admin.createStaff(name.trim(), email.trim(), pass, perms)
+        var perms by remember { mutableStateOf(StaffPermissions(manageProducts = true, updateOrders = true)) }
+        val selected = remember { mutableStateListOf<String>() }
+        FormDialog("دعوة بائع موثوق", busy, email.trim().contains('@') && email.contains('.'), { creating = false }, {
+            action.run(toast, { creating = false; toast("تمت الدعوة. عند تسجيله بهذا البريد يصبح بائعاً تلقائياً"); vm.load(silent = true) }) {
+                c.admin.invite(email, name, perms, selected.toList())
             }
         }) {
-            MedkTextField(name, { name = it }, "الاسم الكامل", leading = Icons.Filled.Person)
-            MedkTextField(email, { email = it }, "البريد الإلكتروني", leading = Icons.Filled.Email, keyboardType = KeyboardType.Email)
-            MedkTextField(pass, { pass = it }, "كلمة المرور (8 أحرف على الأقل)", leading = Icons.Filled.Lock, isPassword = true)
+            Text("أدخل بريد البائع. عندما يسجّل الدخول بهذا البريد (Google أو كلمة مرور مع تأكيد البريد) يصبح بائعاً بالصلاحيات والأقسام التي تحددها هنا فقط.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            MedkTextField(email, { email = it.trim() }, "البريد الإلكتروني", leading = Icons.Filled.Email, keyboardType = KeyboardType.Email)
+            MedkTextField(name, { name = it }, "الاسم (اختياري)", leading = Icons.Filled.Person)
             PermissionSwitches(perms) { perms = it }
+            Text("ماذا يبيع؟", style = MaterialTheme.typography.titleSmall)
+            if (d != null) SectionPicker(d.categories, d.sections, selected)
         }
     }
 }
+
+/** Categories with their sections; ticking a category selects all of its sections ("only game top-ups"). */
+@Composable
+fun SectionPicker(categories: List<Category>, sections: List<Section>, selected: androidx.compose.runtime.snapshots.SnapshotStateList<String>,
+                  assignedTo: String? = null) {
+    Column {
+        categories.forEach { cat ->
+            val secs = sections.filter { it.categoryId == cat.id }
+            if (secs.isNotEmpty()) {
+                val all = secs.all { it.id in selected }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(all, { on -> secs.forEach { s -> selected.remove(s.id) }; if (on) selected.addAll(secs.map { it.id }) },
+                        colors = CheckboxDefaults.colors(checkedColor = MedkColors.Purple))
+                    Text(cat.name, style = MaterialTheme.typography.labelLarge, color = MedkColors.Violet, modifier = Modifier.weight(1f))
+                }
+                secs.forEach { s ->
+                    Row(Modifier.padding(start = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(s.id in selected, { on -> if (on) selected.add(s.id) else selected.remove(s.id) },
+                            colors = CheckboxDefaults.colors(checkedColor = MedkColors.Purple))
+                        Text(s.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        if (assignedTo != null && s.assignedStaffId == assignedTo) Pill("المسؤول", MedkColors.Info)
+                        else if (s.assignedStaffId != null && assignedTo == null) Pill("له بائع", MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun sectionSummary(ids: List<String>, categories: List<Category>, sections: List<Section>): String {
+    if (ids.isEmpty()) return "بدون أقسام بعد"
+    return categories.mapNotNull { cat ->
+        val secs = sections.filter { it.categoryId == cat.id }
+        val mine = secs.filter { it.id in ids }
+        when { mine.isEmpty() -> null; mine.size == secs.size -> cat.name; else -> cat.name + ": " + mine.joinToString("، ") { it.name } }
+    }.joinToString(" • ")
+}
+
+data class StaffListData(val staff: List<Profile>, val invites: List<com.medk.app.data.Invite>, val categories: List<Category>, val sections: List<Section>)
 
 @Composable
 fun StaffDetailScreen(id: String, nav: NavHostController) {
@@ -374,24 +446,7 @@ fun StaffDetailScreen(id: String, nav: NavHostController) {
                 Text("الأقسام والألعاب المسموحة", style = MaterialTheme.typography.titleMedium)
                 Text("يرى البائع طلبات ومحادثات الأقسام المسندة إليه، ويدير منتجات الأقسام المحددة هنا.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                MedkCard(padding = PaddingValues(8.dp)) {
-                    Column {
-                        d.categories.forEach { cat ->
-                            val secs = d.allSections.filter { it.categoryId == cat.id }
-                            if (secs.isNotEmpty()) {
-                                Text(cat.name, style = MaterialTheme.typography.labelLarge, color = MedkColors.Violet, modifier = Modifier.padding(8.dp))
-                                secs.forEach { s ->
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Checkbox(s.id in selected, { on -> if (on) selected.add(s.id) else selected.remove(s.id) },
-                                            colors = CheckboxDefaults.colors(checkedColor = MedkColors.Purple))
-                                        Text(s.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                                        if (s.id in assigned) Pill("البائع المسؤول", MedkColors.Info)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                MedkCard(padding = PaddingValues(8.dp)) { SectionPicker(d.categories, d.allSections, selected, assignedTo = id) }
                 PrimaryButton("حفظ الصلاحيات", {
                     action.run(toast, { toast("تم حفظ الصلاحيات"); vm.load(silent = true) }) { c.admin.setPermissions(id, perms, selected.toSet()) }
                 }, loading = busy)

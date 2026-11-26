@@ -76,8 +76,11 @@ open class AuthRepository(private val c: AppContainer) {
                 "role" to role, "active" to true, "perms" to perms, "sections" to emptyList<String>(),
                 "createdAt" to FieldValue.serverTimestamp(), "updatedAt" to FieldValue.serverTimestamp())
             val ownerTry = verified && runCatching { ref.set(profile("owner", OWNER_PERMS)).await() }.isSuccess
-            if (!ownerTry) ref.set(profile("customer", DEFAULT_PERMS)).await()
+            val invited = !ownerTry && acceptInvite(null)
+            if (!ownerTry && !invited) ref.set(profile("customer", DEFAULT_PERMS)).await()
             ownerProbeDone(user.uid)
+            snap = ref.get(com.google.firebase.firestore.Source.SERVER).await()
+        } else if (snap.getString("role") == "customer" && verified && acceptInvite(snap)) {
             snap = ref.get(com.google.firebase.firestore.Source.SERVER).await()
         } else if (snap.getString("role") == "customer" && verified && !isOwnerProbeDone(user.uid)) {
             // owner who signed up with a password: promoted once the e-mail is verified (rules check the list)
@@ -95,6 +98,39 @@ open class AuthRepository(private val c: AppContainer) {
         c.notifications.start(p.id)
         c.push.register(p.id)
         return p
+    }
+
+    /**
+     * The owner invited this (verified) e-mail as a seller: become a seller with exactly the invited permissions and
+     * sections, consume the invitation and take the still-unassigned invited sections — one atomic batch, checked
+     * by the security rules. Returns false when there is no usable invitation.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private suspend fun acceptInvite(existing: com.google.firebase.firestore.DocumentSnapshot?): Boolean {
+        val user = c.firebaseAuth?.currentUser ?: return false
+        if (!user.isEmailVerified) return false
+        val email = user.email?.lowercase() ?: return false
+        val db = c.firestore
+        val inv = runCatching { db.collection("invites").document(email).get(com.google.firebase.firestore.Source.SERVER).await() }
+            .getOrNull() ?: return false
+        if (!inv.exists() || inv.getString("acceptedBy") != null) return false
+        val perms = inv.get("perms") as? Map<String, Any?> ?: return false
+        val sections = (inv.get("sections") as? List<String>).orEmpty()
+        val ref = db.collection("users").document(user.uid)
+        return runCatching {
+            val batch = db.batch()
+            if (existing == null) batch.set(ref, mapOf(
+                "email" to user.email, "fullName" to (inv.getString("name") ?: user.displayName)?.take(80),
+                "avatarUrl" to user.photoUrl?.toString(), "role" to "staff", "active" to true, "perms" to perms, "sections" to sections,
+                "createdAt" to FieldValue.serverTimestamp(), "updatedAt" to FieldValue.serverTimestamp()))
+            else batch.update(ref, mapOf("role" to "staff", "perms" to perms, "sections" to sections, "updatedAt" to FieldValue.serverTimestamp()))
+            batch.update(inv.reference, mapOf("acceptedBy" to user.uid, "acceptedAt" to FieldValue.serverTimestamp()))
+            for (sid in sections) {
+                val sec = db.collection("sections").document(sid).get().await()
+                if (sec.exists() && sec.getString("assignedStaffId") == null) batch.update(sec.reference, "assignedStaffId", user.uid)
+            }
+            batch.commit().await()
+        }.onFailure { android.util.Log.w("MedkAuth", "invite acceptance failed", it) }.isSuccess
     }
 
     private val probePrefs by lazy { c.context.getSharedPreferences("medk_owner_probe", android.content.Context.MODE_PRIVATE) }

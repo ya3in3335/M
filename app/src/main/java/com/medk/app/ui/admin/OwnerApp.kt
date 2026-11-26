@@ -192,7 +192,7 @@ fun AdminMoreScreen(nav: NavHostController, profile: Profile, unread: Int) {
                 }
             }
             Group("المال") {
-                MoreRow(Icons.Filled.AccountBalanceWallet, "المدفوعات والعمولة وطلبات السحب") { nav.navigate(Routes.ADMIN_PAYMENTS) }
+                MoreRow(Icons.Filled.AccountBalanceWallet, "الدفع والعمولات") { nav.navigate(Routes.ADMIN_PAYMENTS) }
             }
             Group("الأشخاص") {
                 MoreRow(Icons.Filled.ManageAccounts, "البائعون والصلاحيات") { nav.navigate(Routes.ADMIN_STAFF) }

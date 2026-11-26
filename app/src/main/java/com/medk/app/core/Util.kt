@@ -45,17 +45,7 @@ fun Throwable.friendly(): String {
             m.contains("forbidden") || m.contains("owner only") ->
             "ليست لديك صلاحية لتنفيذ هذا الإجراء."
         m.contains("unauthenticated") || m.contains("401") -> "انتهت الجلسة، يرجى تسجيل الدخول مجدداً."
-        m.contains("payments_not_configured") || m.contains("payments_disabled") -> "الدفع داخل التطبيق غير متاح حالياً."
-        m.contains("already_paid") -> "هذا الطلب مدفوع بالفعل."
-        m.contains("amount_below_min") -> "أقل مبلغ للدفع بـ USDT حالياً هو " +
-            (Regex("amount_below_min:([0-9.]+)").find(m)?.groupValues?.get(1) ?: "10") +
-            " دولار (حد بوابة الدفع). اجمع منتجات أكثر في طلب واحد أو تواصل مع البائع لطريقة دفع أخرى."
-        m.contains("amount_too_small") -> "أقل مبلغ للدفع بالعملات الرقمية هو 1 دولار."
-        m.contains("insufficient_balance") -> "رصيدك غير كافٍ لهذا المبلغ."
-        m.contains("min_withdrawal_5") -> "أقل مبلغ للسحب هو 5 USDT."
-        m.contains("bad_address") -> "عنوان المحفظة غير صحيح. يجب أن يكون عنوان USDT على شبكة TRC20 ويبدأ بحرف T."
-        m.contains("not_pending") -> "تمت معالجة هذا الطلب مسبقاً."
-        m.contains("gateway_") -> "بوابة الدفع لا تستجيب حالياً، حاول بعد قليل."
+        m.contains("bad_email") -> "البريد الإلكتروني غير صحيح."
         m.contains("commission_range") -> "النسبة يجب أن تكون بين 0 و 50%."
         m.contains("requires an index") || m.contains("index is currently building") ->
             "قاعدة البيانات قيد التجهيز (الفهارس). أعد المحاولة بعد دقائق."

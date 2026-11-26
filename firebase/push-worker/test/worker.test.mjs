@@ -146,80 +146,27 @@ await t("bad input rejected", async () => {
   assert.equal((await call("cust", { type: "spam" })).status, 400);
 });
 
-// ------------------------------------------------------------------ payments
-const ipn = async (pid) => { const r = await worker.fetch(new Request("https://w/ipn", { method: "POST", body: JSON.stringify({ payment_id: pid }) }), env, {}); return { status: r.status, ...(await r.json()) }; };
-const finished = (o) => ({ payment_id: 555, invoice_id: 9001, order_id: "o3", payment_status: "finished", price_amount: 20, outcome_amount: 19.8, outcome_currency: "usdttrc20", ...o });
-
-await t("customer opens a USDT invoice; amount comes from the database", async () => {
-  const r = await call("cust", { orderId: "o3", amountUsd: 0.01 }, undefined, "/pay");
-  assert.equal(r.url, "https://pay/inv/1"); assert.equal(invoices[0].price_amount, 20); assert.equal(invoices[0].order_id, "o3");
-  assert.equal(invoices[0].ipn_callback_url, "https://w/ipn"); assert.equal(db["orders/o3"].payment.status, "waiting");
-  assert.equal((await call("cust", { orderId: "o3" }, undefined, "/pay")).url, "https://pay/inv/1", "reuses the open invoice");
-  assert.equal(invoices.length, 1);
+// ------------------------------------------------------------------ manual payments
+await t("customer payment claim → assigned seller only", async () => {
+  db["orders/o1"].paymentClaim = { method: "بريدي موب", at: iso() };
+  const r = await call("cust", { type: "paymentClaim", orderId: "o1" });
+  assert.equal(r.sent, 1); assert.deepEqual(to(), ["TOK_ST1"]); assert.match(sent[0].notification.body, /بريدي موب/);
 });
-await t("only the order's customer can pay it; paid orders refused", async () => {
-  assert.equal((await call("cust2", { orderId: "o3" }, undefined, "/pay")).status, 403);
-  assert.equal((await call("cust", { orderId: "o1" }, undefined, "/pay")).status, 409);
+await t("claim on an unassigned order → owner", async () => {
+  db["orders/o4"].paymentClaim = { method: "CCP", at: iso() };
+  await call("cust", { type: "paymentClaim", orderId: "o4" }); assert.deepEqual(to(), ["TOK_OWN"]);
 });
-await t("amount below the gateway minimum → clear error, no invoice", async () => {
-  db["orders/o3"].totalUsd = 5;
-  assert.equal((await call("cust", { orderId: "o3" }, undefined, "/pay")).error, "amount_below_min:10.31"); assert.equal(invoices.length, 0);
+await t("claims: only the customer, only recent", async () => {
+  db["orders/o1"].paymentClaim = { method: "x", at: iso() };
+  assert.equal((await call("st1", { type: "paymentClaim", orderId: "o1" })).status, 403);
+  db["orders/o1"].paymentClaim = { method: "x", at: iso(-3600e3) };
+  assert.equal((await call("cust", { type: "paymentClaim", orderId: "o1" })).status, 403);
+  delete db["orders/o1"].paymentClaim;
+  assert.equal((await call("cust", { type: "paymentClaim", orderId: "o1" })).status, 403);
 });
-await t("payments disabled by the owner → refused", async () => {
-  db["config/payments"].enabled = false; assert.equal((await call("cust", { orderId: "o3" }, undefined, "/pay")).status, 503);
-});
-await t("finished payment: order paid + split fee / 10% commission / seller, notifications", async () => {
-  await call("cust", { orderId: "o3" }, undefined, "/pay"); payments["555"] = finished();
-  const r = await ipn(555);
-  assert.deepEqual(r.split, { fee: 0.2, commission: 1.98, seller: 17.82 });
-  assert.equal(db["orders/o3"].status, "paid"); assert.ok(db["orders/o3"].paidAt);
-  assert.equal(db["orders/o3"].payment.sellerUsd, 17.82); assert.equal(db["wallets/st1"].balanceUsd, 17.82);
-  assert.equal(db["wallets/platform"].balanceUsd, 1.98); assert.equal(db["wallets/st1/entries/sale-o3"].amountUsd, 17.82);
-  assert.ok(to().includes("TOK_CUST") && to().includes("TOK_ST1") && to().includes("TOK_OWN"));
-});
-await t("duplicate callbacks never pay twice", async () => {
-  await call("cust", { orderId: "o3" }, undefined, "/pay"); payments["555"] = finished();
-  await ipn(555); const again = await ipn(555);
-  assert.equal(again.already, true); assert.equal(db["wallets/st1"].balanceUsd, 17.82);
-});
-await t("concurrent change is retried safely", async () => {
-  await call("cust", { orderId: "o3" }, undefined, "/pay"); payments["555"] = finished(); commitFail = 1;
-  assert.equal((await ipn(555)).ok, true); assert.equal(db["wallets/st1"].balanceUsd, 17.82);
-});
-await t("wrong amount / unknown invoice / not finished → no money moves", async () => {
-  await call("cust", { orderId: "o3" }, undefined, "/pay");
-  payments["1"] = finished({ payment_id: 1, price_amount: 2 }); assert.equal((await ipn(1)).error, "amount_mismatch");
-  payments["2"] = finished({ payment_id: 2, invoice_id: 1 }); assert.equal((await ipn(2)).error, "unknown_invoice");
-  payments["3"] = finished({ payment_id: 3, payment_status: "partially_paid" }); assert.equal((await ipn(3)).status, "partially_paid");
-  assert.equal(db["orders/o3"].status, "open"); assert.equal(db["wallets/st1"], undefined);
-  assert.equal((await ipn("abc")).status, 400);
-});
-await t("order without a seller → everything to the platform", async () => {
-  await call("cust", { orderId: "o4" }, undefined, "/pay");
-  payments["7"] = finished({ payment_id: 7, invoice_id: 9001, order_id: "o4", price_amount: 12, outcome_amount: 11.95 });
-  const r = await ipn(7); assert.deepEqual(r.split, { fee: 0.05, commission: 11.95, seller: 0 });
-  assert.equal(db["wallets/platform"].balanceUsd, 11.95);
-});
-await t("seller withdraws to TRC20; balance reserved; validation", async () => {
-  db["wallets/st1"] = { balanceUsd: 50 };
-  const addr = "TXYZabcdefghijkmnopqrstuvwxyz12345";
-  assert.equal((await call("st1", { amountUsd: 100, address: addr }, undefined, "/withdraw")).error, "insufficient_balance");
-  assert.equal((await call("st1", { amountUsd: 10, address: "0xabc" }, undefined, "/withdraw")).error, "bad_address");
-  assert.equal((await call("st1", { amountUsd: 2, address: addr }, undefined, "/withdraw")).error, "min_withdrawal_5");
-  assert.equal((await call("cust", { amountUsd: 10, address: addr }, undefined, "/withdraw")).status, 403);
-  const r = await call("st1", { amountUsd: 20, address: addr }, undefined, "/withdraw");
-  assert.equal(r.ok, true); assert.equal(db["wallets/st1"].balanceUsd, 30); assert.equal(db[`withdrawals/${r.id}`].status, "pending");
-  assert.ok(to().includes("TOK_OWN"));
-});
-await t("owner pays or rejects (refund); others cannot", async () => {
-  db["wallets/st1"] = { balanceUsd: 50 }; const addr = "TXYZabcdefghijkmnopqrstuvwxyz12345";
-  const a = await call("st1", { amountUsd: 20, address: addr }, undefined, "/withdraw");
-  const b = await call("st1", { amountUsd: 10, address: addr }, undefined, "/withdraw");
-  assert.equal((await call("st1", { id: a.id, action: "paid" }, undefined, "/withdrawal")).status, 403);
-  assert.equal((await call("own", { id: a.id, action: "paid", txid: "abc123" }, undefined, "/withdrawal")).ok, true);
-  assert.equal(db[`withdrawals/${a.id}`].status, "paid"); assert.equal(db[`withdrawals/${a.id}`].txid, "abc123");
-  assert.equal((await call("own", { id: a.id, action: "reject" }, undefined, "/withdrawal")).status, 409, "no double decision");
-  await call("own", { id: b.id, action: "reject" }, undefined, "/withdrawal");
-  assert.equal(db["wallets/st1"].balanceUsd, 30); assert.equal(db[`withdrawals/${b.id}`].status, "rejected");
+await t("payment endpoints are gone", async () => {
+  for (const p of ["/pay", "/ipn", "/withdraw", "/withdrawal", "/paycheck"]) {
+    const r = await worker.fetch(new Request("https://w" + p, { method: "POST", body: "{}" }), env, {}); assert.equal(r.status, 404);
+  }
 });
 console.log(`\n  ${n} passing`);

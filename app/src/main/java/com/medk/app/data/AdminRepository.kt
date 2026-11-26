@@ -91,6 +91,26 @@ open class AdminRepository(private val c: AppContainer) {
     }
 
     /** Promotes a customer to seller or demotes a seller to customer. */
+    // ------------------------------------------------------------ seller invitations
+    @Suppress("UNCHECKED_CAST")
+    open suspend fun invites(): List<Invite> = db.collection("invites").get().await().documents.map {
+        val p = it.get("perms") as? Map<String, Boolean> ?: emptyMap()
+        Invite(it.id, it.getString("name"), StaffPermissions(p["manageProducts"] == true, p["updateOrders"] == true,
+            p["manageP2p"] == true, p["viewStats"] == true), (it.get("sections") as? List<String>).orEmpty(),
+            it.getTimestamp("createdAt")?.toDate()?.toInstant()?.toString() ?: "", it.getString("acceptedBy"))
+    }.sortedByDescending { it.createdAt }
+
+    /** Pre-approves an e-mail: whoever signs in with it (verified) becomes a seller with exactly these rights. */
+    open suspend fun invite(email: String, name: String?, perms: StaffPermissions, sectionIds: List<String>) {
+        val e = email.trim().lowercase()
+        require(Regex("[^@ ]+@[^@ ]+[.][^@ ]+").matches(e)) { "bad_email" }
+        db.collection("invites").document(e).set(mapOf("email" to e, "name" to name?.trim()?.ifBlank { null },
+            "perms" to permsMap(perms), "sections" to sectionIds.distinct(), "createdBy" to c.auth.currentUid,
+            "createdAt" to FieldValue.serverTimestamp(), "acceptedBy" to null, "acceptedAt" to null)).await()
+    }
+
+    open suspend fun deleteInvite(email: String) { db.collection("invites").document(email).delete().await() }
+
     open suspend fun setRole(uid: String, role: Role) {
         val snap = users.document(uid).get().await()
         val r = role.name.lowercase()

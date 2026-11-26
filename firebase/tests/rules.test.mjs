@@ -145,7 +145,7 @@ describe("security rules (free plan)", () => {
     });
     it("customer cannot change status; assigned seller with permission can", async () => {
       await assertFails(updateDoc(doc(as("cust"), "orders/o1"), { status: "paid", updatedAt: serverTimestamp(), paidAt: serverTimestamp() }));
-      await assertSucceeds(updateDoc(doc(as("st1"), "orders/o1"), { status: "paid", updatedAt: serverTimestamp(), paidAt: serverTimestamp() }));
+      await assertSucceeds(updateDoc(doc(as("st1"), "orders/o1"), { status: "paid", updatedAt: serverTimestamp(), paidAt: serverTimestamp(), commissionPct: 0 }));
     });
     it("seller cannot change totals or reassign", async () => {
       await assertFails(updateDoc(doc(as("st1"), "orders/o1"), { totalUsd: 0, updatedAt: serverTimestamp() }));
@@ -235,50 +235,135 @@ describe("security rules (free plan)", () => {
     });
   });
 
-  describe("payments & wallets", () => {
+  describe("seller invitations", () => {
+    const perms = { manageProducts: true, updateOrders: true, manageP2p: false, viewStats: false };
+    const invite = (o = {}) => ({ email: "seller@t.dev", name: "Ali", perms, sections: ["s_pubg"], createdBy: "owner",
+      createdAt: serverTimestamp(), acceptedBy: null, acceptedAt: null, ...o });
+    const prof = (o = {}) => ({ email: "seller@t.dev", fullName: "Ali", avatarUrl: null, role: "staff", active: true, perms,
+      sections: ["s_pubg"], createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...o });
+    const seed = async (o = {}) => env.withSecurityRulesDisabled(async (c) => {
+      await setDoc(doc(c.firestore(), "invites/seller@t.dev"), { ...invite(o), createdAt: new Date() });
+    });
+    const sellerDb = (verified = true) => env.authenticatedContext("newseller", { email: "seller@t.dev", email_verified: verified }).firestore();
+    const accept = (db, userWrite) => {
+      const b = writeBatch(db);
+      userWrite(b);
+      b.update(doc(db, "invites/seller@t.dev"), { acceptedBy: "newseller", acceptedAt: serverTimestamp() });
+      return b;
+    };
+
+    it("only the owner creates, lists and deletes invitations", async () => {
+      await assertSucceeds(setDoc(doc(as("owner"), "invites/seller@t.dev"), invite()));
+      await assertSucceeds(getDocs(collection(as("owner"), "invites")));
+      await assertFails(setDoc(doc(as("st1"), "invites/x@t.dev"), invite({ email: "x@t.dev", createdBy: "st1" })));
+      await assertFails(setDoc(doc(as("cust"), "invites/cust@t.dev"), invite({ email: "cust@t.dev", createdBy: "cust" })));
+      await assertFails(setDoc(doc(as("owner"), "invites/BAD@t.dev"), invite({ email: "BAD@t.dev" })));
+      await assertFails(setDoc(doc(as("owner"), "invites/seller@t.dev"), invite({ acceptedBy: "someone" })));
+      await assertFails(getDocs(collection(as("cust"), "invites")));
+      await assertSucceeds(deleteDoc(doc(as("owner"), "invites/seller@t.dev")));
+    });
+    it("the invited (verified) e-mail signs up directly as a seller with the chosen permissions", async () => {
+      await seed();
+      const db = sellerDb();
+      await assertSucceeds(getDoc(doc(db, "invites/seller@t.dev")));
+      await assertSucceeds(accept(db, (b) => b.set(doc(db, "users/newseller"), prof())).commit());
+      const again = sellerDb();   // the invitation is now used: cannot be consumed a second time
+      await assertFails(accept(again, (b) => b.set(doc(again, "users/x"), prof())).commit());
+    });
+    it("cannot take more permissions or sections than invited, nor skip consuming the invite", async () => {
+      await seed();
+      const db = sellerDb();
+      await assertFails(accept(db, (b) => b.set(doc(db, "users/newseller"), prof({ perms: { ...perms, manageP2p: true } }))).commit());
+      await assertFails(accept(db, (b) => b.set(doc(db, "users/newseller"), prof({ sections: ["s_pubg", "s_ff"] }))).commit());
+      await assertFails(accept(db, (b) => b.set(doc(db, "users/newseller"), prof({ role: "owner" }))).commit());
+      await assertFails(setDoc(doc(db, "users/newseller"), prof()));
+    });
+    it("unverified e-mail, other e-mails and used invites are refused", async () => {
+      await seed();
+      const un = sellerDb(false);
+      await assertFails(accept(un, (b) => b.set(doc(un, "users/newseller"), prof())).commit());
+      const other = env.authenticatedContext("newseller", { email: "other@t.dev", email_verified: true }).firestore();
+      await assertFails(getDoc(doc(other, "invites/seller@t.dev")));
+      await seed({ acceptedBy: "someone" });
+      const db = sellerDb();
+      await assertFails(accept(db, (b) => b.set(doc(db, "users/newseller"), prof())).commit());
+    });
+    it("an existing customer with an invited e-mail is promoted once", async () => {
+      await seed();
+      await env.withSecurityRulesDisabled(async (c) => {
+        await setDoc(doc(c.firestore(), "users/newseller"), { ...prof({ role: "customer", perms: P, sections: [] }), createdAt: new Date(), updatedAt: new Date() });
+      });
+      const db = sellerDb();
+      await assertSucceeds(accept(db, (b) => b.update(doc(db, "users/newseller"),
+        { role: "staff", perms, sections: ["s_pubg"], updatedAt: serverTimestamp() })).commit());
+      await assertFails(updateDoc(doc(db, "users/newseller"), { role: "owner", updatedAt: serverTimestamp() }));
+    });
+    it("while accepting, the seller takes his unassigned sections only", async () => {
+      await seed({ sections: ["s_pubg", "s_ff"] });
+      const db = sellerDb();
+      const ok = accept(db, (b) => b.set(doc(db, "users/newseller"), prof({ sections: ["s_pubg", "s_ff"] })));
+      ok.update(doc(db, "sections/s_pubg"), { assignedStaffId: "newseller" });
+      await assertSucceeds(ok.commit());
+      await seed({ sections: ["s_pubg", "s_ff"] });
+      const db2 = env.authenticatedContext("seller2", { email: "seller@t.dev", email_verified: true }).firestore();
+      const steal = writeBatch(db2);
+      steal.set(doc(db2, "users/seller2"), prof({ sections: ["s_pubg", "s_ff"] }));
+      steal.update(doc(db2, "invites/seller@t.dev"), { acceptedBy: "seller2", acceptedAt: serverTimestamp() });
+      steal.update(doc(db2, "sections/s_ff"), { assignedStaffId: "seller2" });   // already assigned to st1
+      await assertFails(steal.commit());
+      await assertFails(updateDoc(doc(as("st1"), "sections/s_pubg"), { assignedStaffId: "st1" }));
+    });
+  });
+
+  describe("manual payments & commission", () => {
     beforeEach(async () => {
       await env.withSecurityRulesDisabled(async (c) => {
-        const db = c.firestore();
-        await setDoc(doc(db, "wallets/st1"), { balanceUsd: 10 });
-        await setDoc(doc(db, "wallets/st1/entries/sale-o1"), { type: "sale", amountUsd: 10 });
-        await setDoc(doc(db, "wallets/platform"), { balanceUsd: 1 });
-        await setDoc(doc(db, "withdrawals/w1"), { uid: "st1", amountUsd: 5, status: "pending" });
+        await setDoc(doc(c.firestore(), "config/payments"), { commissionPct: 10, updatedAt: new Date() });
       });
     });
-    it("a seller sees only his own wallet, history and withdrawals", async () => {
-      await assertSucceeds(getDoc(doc(as("st1"), "wallets/st1")));
-      await assertSucceeds(getDocs(collection(as("st1"), "wallets/st1/entries")));
-      await assertSucceeds(getDocs(query(collection(as("st1"), "withdrawals"), where("uid", "==", "st1"))));
-      await assertFails(getDoc(doc(as("st2"), "wallets/st1")));
-      await assertFails(getDoc(doc(as("st1"), "wallets/platform")));
-      await assertFails(getDocs(collection(as("st1"), "withdrawals")));
-      await assertFails(getDoc(doc(as("cust"), "withdrawals/w1")));
+    const methods = (o = {}) => ({ methods: [{ type: "baridimob", title: "بريدي موب", account: "00799999000123456789", holder: "Ali", note: null }],
+      updatedAt: serverTimestamp(), ...o });
+    it("each seller manages only his own payment methods; the owner manages the store's", async () => {
+      await assertSucceeds(setDoc(doc(as("st1"), "paymentMethods/st1"), methods()));
+      await assertFails(setDoc(doc(as("st1"), "paymentMethods/st2"), methods()));
+      await assertFails(setDoc(doc(as("st1"), "paymentMethods/store"), methods()));
+      await assertFails(setDoc(doc(as("cust"), "paymentMethods/cust"), methods()));
+      await assertSucceeds(setDoc(doc(as("owner"), "paymentMethods/store"), methods()));
+      await assertFails(setDoc(doc(as("st1"), "paymentMethods/st1"), methods({ methods: Array(9).fill({ type: "x" }) })));
+      await assertSucceeds(getDoc(doc(as("cust"), "paymentMethods/st1")));
+      await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), "paymentMethods/st1")));
     });
-    it("the owner sees all money documents", async () => {
-      await assertSucceeds(getDoc(doc(as("owner"), "wallets/st1")));
-      await assertSucceeds(getDoc(doc(as("owner"), "wallets/platform")));
-      await assertSucceeds(getDocs(collection(as("owner"), "withdrawals")));
+    it("the customer declares a manual payment on his open order only", async () => {
+      const claim = { paymentClaim: { method: "بريدي موب", at: serverTimestamp() }, updatedAt: serverTimestamp() };
+      await assertSucceeds(updateDoc(doc(as("cust"), "orders/o1"), claim));
+      await assertFails(updateDoc(doc(as("cust2"), "orders/o1"), claim));
+      await assertFails(updateDoc(doc(as("cust"), "orders/o1"), { ...claim, status: "paid" }));
+      await assertFails(updateDoc(doc(as("cust"), "orders/o1"), { status: "paid", updatedAt: serverTimestamp(), paidAt: serverTimestamp() }));
     });
-    it("nobody writes balances or withdrawals from the app (not even the owner)", async () => {
-      await assertFails(setDoc(doc(as("st1"), "wallets/st1"), { balanceUsd: 9999 }));
-      await assertFails(updateDoc(doc(as("owner"), "wallets/st1"), { balanceUsd: 9999 }));
-      await assertFails(setDoc(doc(as("st1"), "wallets/st1/entries/x"), { amountUsd: 9999 }));
-      await assertFails(setDoc(doc(as("st1"), "withdrawals/w2"), { uid: "st1", amountUsd: 5, status: "pending" }));
-      await assertFails(updateDoc(doc(as("owner"), "withdrawals/w1"), { status: "paid" }));
-    });
-    it("order payment info cannot be forged by anyone", async () => {
-      await assertFails(updateDoc(doc(as("cust"), "orders/o1"), { payment: { status: "finished" } }));
-      await assertFails(updateDoc(doc(as("st1"), "orders/o1"), { payment: { status: "finished" } }));
-      await assertFails(updateDoc(doc(as("owner"), "orders/o1"), { payment: { status: "finished" } }));
+    it("confirming payment stamps the owner's current commission — no other value", async () => {
+      const paid = (o = {}) => ({ status: "paid", updatedAt: serverTimestamp(), paidAt: serverTimestamp(), ...o });
+      await assertFails(updateDoc(doc(as("st1"), "orders/o1"), paid()));
+      await assertFails(updateDoc(doc(as("st1"), "orders/o1"), paid({ commissionPct: 0 })));
+      await assertSucceeds(updateDoc(doc(as("st1"), "orders/o1"), paid({ commissionPct: 10 })));
+      await assertFails(updateDoc(doc(as("st1"), "orders/o1"), { commissionPct: 1, updatedAt: serverTimestamp() }));
+      await assertSucceeds(updateDoc(doc(as("st1"), "orders/o1"), { status: "delivered", updatedAt: serverTimestamp(), deliveredAt: serverTimestamp() }));
     });
     it("only the owner sets the commission (0–50%)", async () => {
-      const cfg = (o = {}) => ({ commissionPct: 12.5, enabled: true, updatedAt: serverTimestamp(), ...o });
+      const cfg = (o = {}) => ({ commissionPct: 12.5, updatedAt: serverTimestamp(), ...o });
       await assertSucceeds(setDoc(doc(as("owner"), "config/payments"), cfg()));
       await assertFails(setDoc(doc(as("owner"), "config/payments"), cfg({ commissionPct: 80 })));
       await assertFails(setDoc(doc(as("owner"), "config/payments"), cfg({ commissionPct: -1 })));
-      await assertFails(setDoc(doc(as("owner"), "config/payments"), { ...cfg(), sellerId: "x" }));
-      await assertFails(setDoc(doc(as("st1"), "config/payments"), cfg()));
-      await assertSucceeds(getDoc(doc(as("cust"), "config/payments")));
+      await assertFails(setDoc(doc(as("st1"), "config/payments"), cfg({ commissionPct: 0 })));
+    });
+    it("commission settlements: owner records, seller sees only his own", async () => {
+      const st = (o = {}) => ({ sellerId: "st1", amountDzd: 5000, amountUsd: 0, note: "BaridiMob", createdBy: "owner", createdAt: serverTimestamp(), ...o });
+      await assertSucceeds(setDoc(doc(as("owner"), "settlements/a"), st()));
+      await assertFails(setDoc(doc(as("st1"), "settlements/b"), st({ createdBy: "st1" })));
+      await assertFails(setDoc(doc(as("owner"), "settlements/c"), st({ sellerId: "cust" })));
+      await assertFails(setDoc(doc(as("owner"), "settlements/d"), st({ amountDzd: 0 })));
+      await assertSucceeds(getDocs(query(collection(as("st1"), "settlements"), where("sellerId", "==", "st1"))));
+      await assertFails(getDocs(query(collection(as("st2"), "settlements"), where("sellerId", "==", "st1"))));
+      await assertFails(updateDoc(doc(as("owner"), "settlements/a"), { amountDzd: 1 }));
     });
   });
 

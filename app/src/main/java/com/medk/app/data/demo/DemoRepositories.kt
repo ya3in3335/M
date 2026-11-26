@@ -245,6 +245,11 @@ class DemoChatRepository(private val c: AppContainer) : ChatRepository(c) {
 
 // ================================================================= admin
 class DemoAdminRepository(private val c: AppContainer) : AdminRepository(c) {
+    override suspend fun invites(): List<com.medk.app.data.Invite> = emptyList()
+    override suspend fun invite(email: String, name: String?, perms: com.medk.app.data.StaffPermissions, sectionIds: List<String>) =
+        error("دعوة البائعين بالبريد متاحة في النسخة الحقيقية فقط")
+    override suspend fun deleteInvite(email: String) {}
+
     override suspend fun stats(): DashboardStats {
         net(); val p = me()
         if (p.roleEnum != Role.OWNER && !p.canViewStats) error("forbidden")

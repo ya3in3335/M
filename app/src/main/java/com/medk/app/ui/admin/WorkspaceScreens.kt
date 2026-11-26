@@ -148,8 +148,8 @@ fun WorkspaceScreen(nav: NavHostController, onMenu: (() -> Unit)?) {
                     item { Tile("الطلبات", Icons.AutoMirrored.Filled.ReceiptLong) { nav.navigate(Routes.adminOrders()) } }
                     item { Tile("المحادثات", Icons.AutoMirrored.Filled.Chat) { nav.toTab(Routes.CONVERSATIONS) } }
                     if (isOwner || me.canManageProducts) item { Tile("المنتجات", Icons.Filled.Inventory2, "${s.products}") { nav.navigate(Routes.ADMIN_PRODUCTS) } }
-                    if (!isOwner) item { Tile("محفظتي", Icons.Filled.AccountBalanceWallet) { nav.navigate(Routes.WALLET) } }
-                    else item { Tile("المدفوعات", Icons.Filled.AccountBalanceWallet) { nav.navigate(Routes.ADMIN_PAYMENTS) } }
+                    if (!isOwner) item { Tile("طرق الدفع والعمولة", Icons.Filled.AccountBalanceWallet) { nav.navigate(Routes.WALLET) } }
+                    else item { Tile("الدفع والعمولات", Icons.Filled.AccountBalanceWallet) { nav.navigate(Routes.ADMIN_PAYMENTS) } }
                     if (!isOwner && me.canManageP2p) item { Tile("أسعار P2P", Icons.Filled.CurrencyExchange) { nav.navigate(Routes.ADMIN_P2P) } }
                     if (isOwner) {
                         item { Tile("العملاء", Icons.Filled.People) { nav.navigate(Routes.ADMIN_CUSTOMERS) } }
