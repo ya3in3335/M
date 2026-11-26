@@ -169,10 +169,7 @@ rm -rf medk-app && git clone -b ccr-d079e25d-odpocv https://github.com/ya3in3335
 rm -rf medk-app && git clone -b ccr-d079e25d-odpocv https://github.com/ya3in3335/M medk-app && CF_TOKEN=... OWNER_EMAILS=you@mail.com bash medk-app/firebase/update-server.sh <PROJECT_ID>
 ```
 
-## تأكيد البريد برمز من 6 أرقام
+## تأكيد البريد (صارم)
 
-عند إنشاء حساب بالبريد وكلمة المرور يصل **رمز من 6 أرقام** (عبر Brevo، مجاني 300 رسالة/يوم)، ويبقى التطبيق مقفلاً حتى يُكتب الرمز. الخادم يخزّن الرمز مشفَّراً، صالح 10 دقائق، 5 محاولات، ومهلة دقيقة بين كل إرسال؛ عند صحته يؤكد الخادم الحساب في Firebase. بدون Brevo يعود التطبيق تلقائياً إلى رابط التأكيد.
-
-```bash
-rm -rf medk-app && git clone -b ccr-d079e25d-odpocv https://github.com/ya3in3335/M medk-app && CF_TOKEN=... BREVO_KEY=... MAIL_FROM=you@gmail.com OWNER_EMAILS=you@mail.com bash medk-app/firebase/setup-email.sh <PROJECT_ID>
-```
+- عند إنشاء حساب بالبريد وكلمة المرور يُرسَل **رابط تأكيد** (من Firebase، بالعربية). التطبيق يبقى مقفلاً على شاشة التأكيد ويفتح تلقائياً بعد الضغط على الرابط.
+- **الخادم يفرض ذلك**: قواعد الحماية ترفض أي قراءة أو كتابة لحساب بريده غير مؤكَّد (الكتالوج العام فقط مرئي). حسابات Google مؤكَّدة تلقائياً.

@@ -15,8 +15,10 @@ service cloud.firestore {
     function uid() { return request.auth.uid; }
     function userPath(id) { return /databases/$(database)/documents/users/$(id); }
     function me() { return get(userPath(uid())).data; }
-    function active() { return signedIn() && exists(userPath(uid())) && me().active == true; }
-    function verified() { return request.auth.token.email_verified == true; }
+    // STRICT: an account whose e-mail is not verified can do nothing (password sign-ups must open the e-mail link;
+    // Google accounts are verified by Google). Only the public catalog stays readable.
+    function verified() { return request.auth.token.get('email_verified', false) == true; }
+    function active() { return signedIn() && verified() && exists(userPath(uid())) && me().active == true; }
     function isOwnerEmail() {
       return signedIn() && verified() && request.auth.token.email.lower() in __OWNER_EMAILS__;
     }
@@ -68,7 +70,7 @@ service cloud.firestore {
 
     // ------------------------------------------------------------- users
     match /users/{userId} {
-      allow get: if signedIn() && (userId == uid() || isOwner());
+      allow get: if signedIn() && verified() && (userId == uid() || isOwner());
       allow list: if isOwner();
 
       function baseProfile() {
@@ -78,7 +80,7 @@ service cloud.firestore {
       }
       // 1) first sign-in: a customer profile — or owner when the verified e-mail is an owner e-mail
       // 2) the owner creates a seller profile for an account it just created
-      allow create: if baseProfile() && (
+      allow create: if verified() && baseProfile() && (
           (userId == uid() && d().email == request.auth.token.get('email', null)
             && ((d().role == 'customer' && defaultPerms(d().perms) && d().sections.size() == 0)
                 || (d().role == 'owner' && isOwnerEmail())))
@@ -118,7 +120,7 @@ service cloud.firestore {
         && d().keys().hasOnly(['displayName', 'avatarUrl', 'role'])
         && optStr(d().get('displayName', null), 80) && img(d().get('avatarUrl', null))
         && d().role == getAfter(userPath(userId)).data.role
-        && (userId == uid() || isOwner());
+        && verified() && (userId == uid() || isOwner());
       allow delete: if false;
     }
 
@@ -345,7 +347,7 @@ service cloud.firestore {
           && d().uid == uid() && d().token is string && d().token.size() > 20 && d().token.size() <= 400
           && d().app in ['store', 'admin'] && now(d().updatedAt);
       }
-      allow get: if signedIn() && resource.data.uid == uid();
+      allow get: if signedIn() && verified() && resource.data.uid == uid();
       allow read: if isOwner();   // owner database explorer (read-only)
       allow create: if active() && validToken();
       allow update: if active() && resource.data.uid == uid() && validToken();
@@ -355,7 +357,7 @@ service cloud.firestore {
     // Public app configuration. config/push is written only by the setup script (admin);
     // config/payments holds the app commission % and is edited by the owner.
     match /config/{id} {
-      allow read: if signedIn();
+      allow read: if signedIn() && verified();
       allow write: if id == 'payments' && isOwner()
         && d().keys().hasOnly(['commissionPct', 'updatedAt'])
         && (d().commissionPct is int || d().commissionPct is float)

@@ -51,8 +51,22 @@ describe("security rules (free plan)", () => {
   describe("sign-up & roles", () => {
     const profile = (o = {}) => ({ email: "new@t.dev", fullName: "New", avatarUrl: null, role: "customer", active: true,
       perms: P, sections: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...o });
-    it("new user creates his customer profile", async () => {
-      await assertSucceeds(setDoc(doc(env.authenticatedContext("new", { email: "new@t.dev" }).firestore(), "users/new"), profile()));
+    it("new user creates his customer profile — only after verifying his e-mail", async () => {
+      await assertFails(setDoc(doc(env.authenticatedContext("new", { email: "new@t.dev" }).firestore(), "users/new"), profile()));
+      await assertFails(setDoc(doc(env.authenticatedContext("new", { email: "new@t.dev", email_verified: false }).firestore(), "users/new"), profile()));
+      await assertSucceeds(setDoc(doc(env.authenticatedContext("new", { email: "new@t.dev", email_verified: true }).firestore(), "users/new"), profile()));
+    });
+    it("STRICT: an unverified e-mail can read or write nothing (except the public catalog)", async () => {
+      const un = env.authenticatedContext("cust", { email: "cust@t.dev", email_verified: false }).firestore();
+      await assertFails(getDoc(doc(un, "users/cust")));
+      await assertFails(getDoc(doc(un, "orders/o1")));
+      await assertFails(getDoc(doc(un, "conversations/c1")));
+      await assertFails(setDoc(doc(un, "users/cust/favorites/visible"), { createdAt: serverTimestamp() }));
+      await assertFails(updateDoc(doc(un, "orders/o1"), { paymentClaim: { method: "x", at: serverTimestamp() }, updatedAt: serverTimestamp() }));
+      await assertFails(getDoc(doc(un, "config/payments")));
+      await assertSucceeds(getDoc(doc(un, "categories/gaming")));
+      const unOwner = env.authenticatedContext("owner", { email: "owner@t.dev", email_verified: false }).firestore();
+      await assertFails(getDocs(collection(unOwner, "users")));
     });
     it("new user cannot create himself as owner or staff", async () => {
       const db = env.authenticatedContext("new", { email: "new@t.dev", email_verified: true }).firestore();

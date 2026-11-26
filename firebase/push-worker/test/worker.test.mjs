@@ -171,45 +171,7 @@ await t("payment endpoints are gone", async () => {
     const r = await worker.fetch(new Request("https://w" + p, { method: "POST", body: "{}" }), env, {}); assert.equal(r.status, 404);
   }
 });
-// ------------------------------------------------------------------ e-mail code (OTP)
-const otp = (path, body = {}, claims = {}) => call("newu", body, idToken("newu", { email: "new@user.dev", email_verified: false, ...claims }), path);
-const codeFromMail = () => mails.at(-1).subject.match(/(\d{6})/)[1];
-await t("sends a 6-digit code to the token's own e-mail, stored hashed", async () => {
-  const r = await otp("/otp/send", { email: "victim@evil.dev" });
-  assert.equal(r.sent, true); assert.equal(mails[0].to[0].email, "new@user.dev"); assert.match(mails[0].subject, /\d{6}/);
-  assert.equal(mails[0].sender.email, "no-reply@medk.app");
-  assert.ok(db["emailOtps/newu"].hash && !JSON.stringify(db["emailOtps/newu"]).includes(codeFromMail()));
-});
-await t("right code → Firebase account marked verified, code deleted", async () => {
-  await otp("/otp/send"); const r = await otp("/otp/verify", { code: codeFromMail() });
-  assert.equal(r.verified, true); assert.deepEqual(verifiedUsers[0], { localId: "newu", emailVerified: true });
-  assert.equal(db["emailOtps/newu"], undefined);
-});
-await t("wrong codes are counted and lock after 5 attempts", async () => {
-  await otp("/otp/send"); const good = codeFromMail(); const bad = good === "000000" ? "111111" : "000000";
-  for (let i = 0; i < 5; i++) assert.equal((await otp("/otp/verify", { code: bad })).error, "otp_invalid");
-  assert.equal((await otp("/otp/verify", { code: good })).error, "otp_locked"); assert.equal(verifiedUsers.length, 0);
-});
-await t("expired codes and malformed input refused", async () => {
-  await otp("/otp/send"); db["emailOtps/newu"].expiresAt = iso(-1000);
-  assert.equal((await otp("/otp/verify", { code: codeFromMail() })).error, "otp_expired");
-  assert.equal((await otp("/otp/verify", { code: "12ab" })).error, "otp_invalid");
-});
-await t("resend cooldown and hourly limit", async () => {
-  await otp("/otp/send"); assert.equal((await otp("/otp/send")).error, "otp_wait");
-  db["emailOtps/newu"].sentAt = iso(-60_000); db["emailOtps/newu"].sends = 6;
-  assert.equal((await otp("/otp/send")).error, "otp_too_many");
-});
-await t("someone else's code is useless; already-verified accounts skip; no token → 401", async () => {
-  await otp("/otp/send"); const c = codeFromMail();
-  const other = await call("other", { code: c }, idToken("other", { email: "new@user.dev", email_verified: false }), "/otp/verify");
-  assert.equal(other.error, "otp_expired");
-  assert.equal((await otp("/otp/send", {}, { email_verified: true })).verified, true);
-  assert.equal((await call("x", {}, "bad", "/otp/send")).status, 401);
-});
-await t("not configured → clear error (app falls back to the e-mail link)", async () => {
-  const r = await worker.fetch(new Request("https://w/otp/send", { method: "POST", headers: { authorization: `Bearer ${idToken("newu", { email: "a@b.c" })}` } }),
-    { ...env, BREVO_API_KEY: undefined }, {});
-  assert.equal((await r.json()).error, "otp_not_configured");
+await t("e-mail code endpoints are not part of the server", async () => {
+  for (const p of ["/otp/send", "/otp/verify"]) assert.equal((await worker.fetch(new Request("https://w" + p, { method: "POST", body: "{}" }), env, {})).status, 404);
 });
 console.log(`\n  ${n} passing`);

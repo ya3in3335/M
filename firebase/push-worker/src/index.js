@@ -21,15 +21,6 @@ export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     if (req.method === "GET" && url.pathname === "/") return json({ ok: true, service: "medk-push" });
-    if (req.method === "POST" && (url.pathname === "/otp/send" || url.pathname === "/otp/verify")) {
-      try {
-        if (!env.SA_KEY || !env.PROJECT_ID) throw new HttpError(500, "server_not_configured");
-        const user = await verifyIdTokenFull((req.headers.get("authorization") || "").replace(/^Bearer\s+/i, ""), env.PROJECT_ID);
-        const body = await req.json().catch(() => ({}));
-        const fs = new Firestore(env);
-        return json(url.pathname === "/otp/send" ? await sendOtp(env, fs, user) : await verifyOtp(env, fs, user, body));
-      } catch (e) { return json({ error: e.message || String(e) }, e.status || 500); }
-    }
     if (req.method !== "POST" || url.pathname !== "/notify") return json({ error: "not_found" }, 404);
     try {
       if (!env.SA_KEY || !env.PROJECT_ID) throw new HttpError(500, "server_not_configured");
@@ -280,7 +271,7 @@ async function accessToken(env) {
   const now = Math.floor(Date.now() / 1000);
   const unsigned = `${b64urlJson({ alg: "RS256", typ: "JWT" })}.${b64urlJson({
     iss: sa.client_email, aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3600,
-    scope: "https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/identitytoolkit",
+    scope: "https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging",
   })}`;
   const pem = sa.private_key.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
   const key = await crypto.subtle.importKey("pkcs8", Uint8Array.from(atob(pem), (c) => c.charCodeAt(0)),
@@ -295,75 +286,4 @@ async function accessToken(env) {
   if (!j.access_token) throw new HttpError(502, "google_auth_failed");
   tokenCache = { value: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
   return j.access_token;
-}
-
-// ============================================================================================== e-mail code (OTP)
-//
-// Sign-up with e-mail + password: a 6-digit code is e-mailed (Brevo, free tier) and, once typed in the app, the
-// server marks the Firebase account as verified (Identity Toolkit admin API). Codes are stored hashed in
-// emailOtps/{uid} (no client access), expire after 10 minutes, allow 5 attempts, and sending is rate-limited.
-// Secrets: BREVO_API_KEY, MAIL_FROM (verified sender address in Brevo).
-
-const OTP_TTL_MS = 10 * 60 * 1000, OTP_COOLDOWN_MS = 55 * 1000, OTP_MAX_PER_HOUR = 6, OTP_MAX_ATTEMPTS = 5;
-
-async function sha256Hex(text) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-async function sendOtp(env, fs, user) {
-  if (!env.BREVO_API_KEY || !env.MAIL_FROM) throw new HttpError(503, "otp_not_configured");
-  if (user.email_verified) return { ok: true, verified: true };
-  const email = String(user.email || "");
-  if (!email) throw new HttpError(400, "no_email");
-  const path = `emailOtps/${user.sub}`;
-  const prev = await fs.get(path);
-  const now = Date.now();
-  if (prev && now - Date.parse(prev.sentAt || 0) < OTP_COOLDOWN_MS) throw new HttpError(429, "otp_wait");
-  const windowStart = prev && now - Date.parse(prev.windowStart || 0) < 3600_000 ? prev.windowStart : new Date(now).toISOString();
-  const sends = prev && prev.windowStart === windowStart ? Number(prev.sends || 0) : 0;
-  if (sends >= OTP_MAX_PER_HOUR) throw new HttpError(429, "otp_too_many");
-  const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, "0");
-  await fs.commit([{ update: { name: fs.name(path), fields: encodeFields({
-    hash: await sha256Hex(`${user.sub}:${code}`), email, expiresAt: new Date(now + OTP_TTL_MS).toISOString(),
-    attempts: 0, sentAt: new Date(now).toISOString(), windowStart, sends: sends + 1 }) } }]);
-  const r = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: { "api-key": env.BREVO_API_KEY, "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({
-      sender: { name: "MED-K", email: env.MAIL_FROM }, to: [{ email }],
-      subject: `رمز التحقق MED-K: ${code}`,
-      htmlContent: `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;background:#0a0a0c;color:#fff;padding:28px;border-radius:14px;max-width:460px;margin:auto">
-<h2 style="margin:0 0 8px;color:#a855f7">MED-K</h2><p style="margin:0 0 18px;color:#ccc">رمز تأكيد بريدك الإلكتروني:</p>
-<div style="font-size:34px;letter-spacing:10px;font-weight:bold;background:#1c1530;border-radius:10px;padding:14px;text-align:center">${code}</div>
-<p style="color:#999;font-size:13px;margin-top:18px">صالح لمدة 10 دقائق. إن لم تطلب هذا الرمز فتجاهل الرسالة.</p></div>`,
-      textContent: `رمز التحقق MED-K: ${code} (صالح 10 دقائق)`,
-    }),
-  });
-  if (!r.ok) throw new HttpError(502, `mail_${r.status}`);
-  return { ok: true, sent: true };
-}
-
-async function verifyOtp(env, fs, user, body) {
-  if (user.email_verified) return { ok: true, verified: true };
-  const code = String(body.code || "").trim();
-  if (!/^\d{6}$/.test(code)) throw new HttpError(400, "otp_invalid");
-  const path = `emailOtps/${user.sub}`;
-  const o = await fs.get(path);
-  if (!o || o.email !== user.email) throw new HttpError(400, "otp_expired");
-  if (Date.now() > Date.parse(o.expiresAt)) throw new HttpError(400, "otp_expired");
-  if (Number(o.attempts || 0) >= OTP_MAX_ATTEMPTS) throw new HttpError(429, "otp_locked");
-  if ((await sha256Hex(`${user.sub}:${code}`)) !== o.hash) {
-    await fs.commit([{ update: { name: fs.name(path), fields: encodeFields({}) }, updateMask: { fieldPaths: [] },
-      updateTransforms: [{ fieldPath: "attempts", increment: { integerValue: "1" } }] }]);
-    throw new HttpError(400, "otp_invalid");
-  }
-  const at = await accessToken(env);
-  const r = await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${env.PROJECT_ID}/accounts:update`, {
-    method: "POST", headers: { authorization: `Bearer ${at}`, "content-type": "application/json" },
-    body: JSON.stringify({ localId: user.sub, emailVerified: true }),
-  });
-  if (!r.ok) throw new HttpError(502, `auth_${r.status}`);
-  await fs.delete(path).catch(() => {});
-  return { ok: true, verified: true };
 }
