@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Dashboard
@@ -190,6 +191,9 @@ fun AdminMoreScreen(nav: NavHostController, profile: Profile, unread: Int) {
                     }
                     Pill("المالك", MedkColors.Violet)
                 }
+            }
+            Group("الإدارة العليا") {
+                MoreRow(Icons.Filled.Storage, "قاعدة البيانات (عرض كامل)") { nav.navigate(Db.ROOT) }
             }
             Group("المال") {
                 MoreRow(Icons.Filled.AccountBalanceWallet, "الدفع والعمولات") { nav.navigate(Routes.ADMIN_PAYMENTS) }

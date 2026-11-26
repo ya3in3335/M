@@ -105,6 +105,7 @@ service cloud.firestore {
 
       match /favorites/{productId} {
         allow read, delete: if active() && userId == uid();
+        allow read: if isOwner();   // owner database explorer
         allow create: if active() && userId == uid() && d().keys().hasOnly(['createdAt']) && now(d().createdAt);
         allow update: if false;
       }
@@ -345,7 +346,7 @@ service cloud.firestore {
           && d().app in ['store', 'admin'] && now(d().updatedAt);
       }
       allow get: if signedIn() && resource.data.uid == uid();
-      allow list: if false;
+      allow read: if isOwner();   // owner database explorer (read-only)
       allow create: if active() && validToken();
       allow update: if active() && resource.data.uid == uid() && validToken();
       allow delete: if signedIn() && resource.data.uid == uid();

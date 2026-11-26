@@ -382,3 +382,56 @@ fun AuthFailedScreen(message: String, onRetry: () -> Unit, onSignOut: () -> Unit
         SecondaryButton("تسجيل الخروج", { scope.launch { onSignOut() } })
     }
 }
+
+
+/** After e-mail sign-up: the app stays locked until the link in the confirmation e-mail is opened. */
+@Composable
+fun VerifyEmailScreen(email: String) {
+    val c = MedkApp.container
+    val scope = rememberCoroutineScope()
+    val toast = com.medk.app.ui.components.LocalToast.current
+    var busy by remember { mutableStateOf(false) }
+    var cooldown by remember { mutableStateOf(60) }
+    LaunchedEffect(Unit) {   // the account unlocks by itself a few seconds after the link is opened
+        while (true) {
+            kotlinx.coroutines.delay(1000)
+            if (cooldown > 0) cooldown--
+            if (cooldown % 5 == 0) runCatching { c.auth.checkEmailVerified() }
+        }
+    }
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().navigationBarsPadding()
+        .verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(84.dp).clip(CircleShape).background(MedkColors.Purple.copy(.15f)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Email, null, tint = MedkColors.Violet, modifier = Modifier.size(40.dp))
+        }
+        Spacer(Modifier.height(20.dp))
+        Text("أكّد بريدك الإلكتروني", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(8.dp))
+        Text("أرسلنا رابط التأكيد إلى", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(email, style = MaterialTheme.typography.titleMedium, color = MedkColors.Violet)
+        Spacer(Modifier.height(8.dp))
+        Text("افتح بريدك واضغط على الرابط، ثم ارجع هنا. إن لم تجده فابحث في «الرسائل غير المرغوب فيها» (Spam).",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Spacer(Modifier.height(24.dp))
+        PrimaryButton("أكّدت بريدي — متابعة", {
+            busy = true
+            scope.launch {
+                val ok = runCatching { c.auth.checkEmailVerified() }.getOrElse { toast(it.friendly()); null }
+                if (ok == false) toast("لم يتم التأكيد بعد. افتح الرابط في البريد أولاً.")
+                busy = false
+            }
+        }, loading = busy)
+        Spacer(Modifier.height(10.dp))
+        SecondaryButton(if (cooldown > 0) "إعادة إرسال الرابط (${cooldown})" else "إعادة إرسال الرابط", {
+            scope.launch {
+                runCatching { c.auth.resendVerification() }
+                    .onSuccess { toast("تم إرسال رابط جديد إلى $email"); cooldown = 60 }
+                    .onFailure { toast(it.friendly()) }
+            }
+        }, enabled = cooldown == 0)
+        Spacer(Modifier.height(10.dp))
+        TextButton({ scope.launch { c.auth.signOut(c.context) } }) { Text("تسجيل الخروج / استعمال بريد آخر") }
+    }
+}

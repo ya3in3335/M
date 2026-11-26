@@ -28,6 +28,8 @@ sealed interface AuthState {
     data object SignedOut : AuthState
     data class SignedIn(val profile: Profile) : AuthState
     data class Failed(val message: String) : AuthState
+    /** Signed up with e-mail + password: the account is unusable until the e-mail link is opened. */
+    data class VerifyEmail(val email: String) : AuthState
 }
 
 class GoogleSignInCancelled : Exception("cancelled")
@@ -53,6 +55,7 @@ open class AuthRepository(private val c: AppContainer) {
     /** Re-validates the stored Firebase session with the server at app start. */
     open suspend fun restore() {
         _state.value = AuthState.Loading
+        needsVerification()?.let { _state.value = it; return }
         _state.value = runCatching { AuthState.SignedIn(bootstrap(null)) }.getOrElse { e ->
             if (e.message?.contains("account_disabled") == true) {
                 c.firebaseAuth?.signOut(); AuthState.SignedOut
@@ -230,7 +233,35 @@ open class AuthRepository(private val c: AppContainer) {
         finishSignIn(google.displayName)
     }
 
+    /** Password accounts must confirm their e-mail first (Google accounts are already verified). */
+    private suspend fun needsVerification(): AuthState.VerifyEmail? {
+        val user = c.firebaseAuth?.currentUser ?: return null
+        if (user.isEmailVerified) return null
+        runCatching { user.reload().await() }
+        val u = c.firebaseAuth?.currentUser ?: return null
+        if (u.isEmailVerified || u.providerData.none { it.providerId == "password" }) return null
+        return AuthState.VerifyEmail(u.email ?: "")
+    }
+
+    private var pendingName: String? = null
+
+    /** "I opened the link": re-reads the account; continues into the app once verified. Returns false if not yet. */
+    open suspend fun checkEmailVerified(): Boolean {
+        val user = c.firebaseAuth?.currentUser ?: return false
+        user.reload().await()
+        val u = c.firebaseAuth?.currentUser ?: return false
+        if (!u.isEmailVerified) return false
+        u.getIdToken(true).await()   // the security rules read email_verified from a fresh token
+        finishSignIn(pendingName)
+        return true
+    }
+
+    open suspend fun resendVerification() {
+        c.firebaseAuth?.currentUser?.sendEmailVerification()?.await() ?: error("not signed in")
+    }
+
     private suspend fun finishSignIn(name: String?) {
+        needsVerification()?.let { pendingName = name; _state.value = it; return }
         try {
             _state.value = AuthState.SignedIn(bootstrap(name))
         } catch (e: Exception) {

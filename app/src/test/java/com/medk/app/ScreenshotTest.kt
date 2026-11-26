@@ -81,6 +81,7 @@ class ScreenshotTest {
     }
 
     @Test fun offline() = shot("08_offline") { com.medk.app.ui.system.OfflineScreen {} }
+    @Test fun verifyEmail() = shot("11_verify_email") { com.medk.app.ui.auth.VerifyEmailScreen("seller@gmail.com") }
     @Test fun updateDialog() = shot("09_update") {
         com.medk.app.ui.system.UpdateDialog(com.medk.app.core.AppUpdate(12, "1.0.12", "https://x", "تحسينات في السرعة وإصلاحات."),
             com.medk.app.core.DownloadState.Downloading(42), {}, {})

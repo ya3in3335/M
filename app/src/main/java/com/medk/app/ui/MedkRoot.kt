@@ -170,6 +170,7 @@ fun MedkRoot(pendingLink: MutableStateFlow<PendingLink?>) {
                     when {
                         k == "splash" -> SplashScreen()
                         a is AuthState.NotConfigured -> NotConfiguredScreen()
+                        a is AuthState.VerifyEmail -> com.medk.app.ui.auth.VerifyEmailScreen(a.email)
                         a is AuthState.Failed -> AuthFailedScreen(a.message, { scope.launch { c.auth.restore() } },
                             { scope.launch { c.auth.signOut(c.context) } })
                         a is AuthState.SignedIn && BuildConfig.ADMIN_APP ->
@@ -340,6 +341,13 @@ fun androidx.navigation.NavGraphBuilder.detailRoutes(nav: NavHostController) {
     composable(Routes.STAFF_DETAIL) { StaffDetailScreen(it.arguments?.getString("id").orEmpty(), nav) }
     composable(Routes.ADMIN_BANNERS) { AdminBannersScreen(nav) }
     composable(Routes.ADMIN_P2P) { AdminP2pScreen(nav) }
+    composable(com.medk.app.ui.admin.Db.ROOT) { com.medk.app.ui.admin.DatabaseScreen(nav) }
+    composable(com.medk.app.ui.admin.Db.COLLECTION, arguments = listOf(androidx.navigation.navArgument("path") { defaultValue = "" })) {
+        com.medk.app.ui.admin.DatabaseCollectionScreen(it.arguments?.getString("path") ?: "", nav)
+    }
+    composable(com.medk.app.ui.admin.Db.DOC, arguments = listOf(androidx.navigation.navArgument("path") { defaultValue = "" })) {
+        com.medk.app.ui.admin.DatabaseDocScreen(it.arguments?.getString("path") ?: "", nav)
+    }
     composable(Routes.WALLET) { com.medk.app.ui.payments.WalletScreen(nav) }
     composable(Routes.ADMIN_PAYMENTS) { com.medk.app.ui.payments.AdminPaymentsScreen(nav) }
     composable(Routes.ADMIN_CUSTOMERS) { com.medk.app.ui.admin.AdminCustomersScreen(nav) }

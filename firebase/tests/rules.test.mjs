@@ -215,8 +215,10 @@ describe("security rules (free plan)", () => {
       await assertFails(setDoc(doc(as("cust"), "pushTokens/t2"), tok({ uid: "cust2" })));
       await assertSucceeds(setDoc(doc(as("cust2"), "pushTokens/t2"), tok({ uid: "cust2" })));
       await assertFails(getDoc(doc(as("cust"), "pushTokens/t2")));
-      await assertFails(getDoc(doc(as("owner"), "pushTokens/t2")));
-      await assertFails(getDocs(collection(as("owner"), "pushTokens")));
+      await assertSucceeds(getDoc(doc(as("owner"), "pushTokens/t2")));
+      await assertFails(deleteDoc(doc(as("owner"), "pushTokens/t2")));
+      await assertSucceeds(getDocs(collection(as("owner"), "pushTokens")));   // owner: database explorer (read-only)
+      await assertFails(getDocs(collection(as("st1"), "pushTokens")));
       await assertFails(setDoc(doc(as("cust"), "pushTokens/t2"), tok()));
       await assertFails(deleteDoc(doc(as("cust"), "pushTokens/t2")));
     });
