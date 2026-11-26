@@ -28,7 +28,8 @@ gcloud config set project "$P" >/dev/null 2>&1
 
 say "2/8 تفعيل الخدمات (Firestore + Authentication)…"
 gcloud services enable firebase.googleapis.com firestore.googleapis.com identitytoolkit.googleapis.com \
-  firebaserules.googleapis.com firebaseappcheck.googleapis.com --project "$P"
+  firebaserules.googleapis.com firebaseappcheck.googleapis.com --project "$P" \
+  || die "يجب الموافقة على شروط Firebase مرة واحدة: افتح https://console.firebase.google.com/?project=$P بنفس الحساب، وافق على الشروط، ثم أعد تشغيل: bash medk-app/firebase/setup-project.sh $P"
 ok "تم"
 
 say "3/8 تسجيل الدخول إلى أداة Firebase…"
