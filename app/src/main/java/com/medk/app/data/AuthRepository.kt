@@ -85,7 +85,8 @@ open class AuthRepository(private val c: AppContainer) {
             snap = ref.get(com.google.firebase.firestore.Source.SERVER).await()
         } else if (snap.getString("role") == "customer" && verified && acceptInvite(snap)) {
             snap = ref.get(com.google.firebase.firestore.Source.SERVER).await()
-        } else if (snap.getString("role") == "customer" && verified && !isOwnerProbeDone(user.uid)) {
+        } else if (snap.getString("role") == "customer" && verified && (!isOwnerProbeDone(user.uid) || com.medk.app.BuildConfig.ADMIN_APP)) {
+            // (admin app: retried at every start so a newly added owner e-mail is promoted even after earlier sign-ins)
             // owner who signed up with a password: promoted once the e-mail is verified (rules check the list)
             runCatching { ref.update(mapOf("role" to "owner", "perms" to OWNER_PERMS, "updatedAt" to FieldValue.serverTimestamp())).await() }
             ownerProbeDone(user.uid)

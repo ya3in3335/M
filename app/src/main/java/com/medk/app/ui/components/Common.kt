@@ -77,20 +77,55 @@ import com.medk.app.ui.theme.MedkShapes
 
 // ------------------------------------------------------------------ brand
 @Composable
-fun MedkWordmark(fontSize: TextUnit = 22.sp, subtitle: Boolean = false, modifier: Modifier = Modifier) {
+fun MedkWordmark(fontSize: TextUnit = 22.sp, subtitle: Boolean = false, modifier: Modifier = Modifier, partner: Boolean = true) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            buildAnnotatedString {
-                withStyle(SpanStyle(brush = Brush.horizontalGradient(listOf(MedkColors.Violet, Color(0xFFD7B8FF))))) { append("MED") }
-                withStyle(SpanStyle(color = MedkColors.Violet)) { append("-") }
-                withStyle(SpanStyle(color = MedkColors.Purple)) { append("K") }
-            },
-            fontSize = fontSize, fontWeight = FontWeight.ExtraBold, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-            style = MaterialTheme.typography.displaySmall.copy(lineHeight = fontSize * 1.1f),
-        )
+        // brand lock-up always reads left-to-right: MED-K × appnova
+        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(brush = Brush.horizontalGradient(listOf(MedkColors.Violet, Color(0xFFD7B8FF))))) { append("MED") }
+                    withStyle(SpanStyle(color = MedkColors.Violet)) { append("-") }
+                    withStyle(SpanStyle(color = MedkColors.Purple)) { append("K") }
+                },
+                fontSize = fontSize, fontWeight = FontWeight.ExtraBold, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                style = MaterialTheme.typography.displaySmall.copy(lineHeight = fontSize * 1.1f),
+            )
+            if (partner) {
+                Text("  ×  ", fontSize = fontSize * 0.6f, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                AppNovaMark(fontSize * 0.82f)
+            }
+        }
+        }
         if (subtitle) Text(
             "Digital Services Marketplace",
             style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (partner) Text(
+            "بالتعاون مع فريق appnova dz",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Partner wordmark: "appnova" (app + nova in a cyan→blue gradient) with a small spark tile. */
+@Composable
+fun AppNovaMark(fontSize: TextUnit = 18.sp, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        val tile = (fontSize.value * 1.05f).dp
+        Box(Modifier.size(tile).clip(androidx.compose.foundation.shape.RoundedCornerShape(tile * 0.28f))
+            .background(Brush.linearGradient(listOf(Color(0xFF22D3EE), Color(0xFF3B82F6)))), contentAlignment = Alignment.Center) {
+            Text("a", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = fontSize * 0.75f,
+                style = MaterialTheme.typography.titleMedium.copy(lineHeight = fontSize * 0.8f))
+        }
+        Spacer(Modifier.width((fontSize.value * 0.25f).dp))
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) { append("app") }
+                withStyle(SpanStyle(brush = Brush.horizontalGradient(listOf(Color(0xFF22D3EE), Color(0xFF3B82F6))))) { append("nova") }
+            },
+            fontSize = fontSize, fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium.copy(lineHeight = fontSize * 1.1f),
         )
     }
 }
