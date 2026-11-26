@@ -118,7 +118,7 @@ fun WorkspaceScreen(nav: NavHostController, onMenu: (() -> Unit)?) {
         PullToRefreshBox(refreshing, { vm.load(silent = true) }) {
             StateView(state, { vm.load() }) { d ->
                 val s = d.stats
-                LazyVerticalGrid(GridCells.Fixed(2), contentPadding = PaddingValues(16.dp, 12.dp),
+                LazyVerticalGrid(GridCells.Fixed(2), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp + com.medk.app.ui.components.LocalBottomBarInset.current),
                     horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (canStats) item(span = { GridItemSpan(2) }) {
                         Row(Modifier.fillMaxWidth().clip(MedkShapes.Chamfer).background(MedkColors.PrimaryGradient).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -221,7 +221,7 @@ fun AdminOrdersScreen(nav: NavHostController, initialStatus: String?, asTab: Boo
             StateView(state, { vm.load() }) { (orders, people) ->
                 val list = orders.filter { (status == null || it.status == status) && (!onlyUnassigned || it.staffId == null) }
                 if (list.isEmpty()) EmptyBox(Icons.AutoMirrored.Filled.ReceiptLong, "لا توجد طلبات")
-                else LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                else LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + com.medk.app.ui.components.LocalBottomBarInset.current), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(list, key = { it.id }) { o ->
                         Column {
                             OrderCard(o, { nav.navigate(Routes.order(o.id)) }, customerName = people[o.customerId]?.displayName)

@@ -180,6 +180,7 @@ dependencies {
     debugImplementation(libs.firebase.appcheck.debug)
 
     implementation(libs.coil.compose)
+    implementation(libs.haze)
     implementation(libs.coil.network)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)

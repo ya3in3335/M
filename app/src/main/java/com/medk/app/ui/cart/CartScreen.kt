@@ -114,7 +114,7 @@ fun CartScreen(nav: NavHostController, onMenu: () -> Unit) {
         }
         // summary
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            .background(MaterialTheme.colorScheme.surfaceContainer).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp + com.medk.app.ui.components.LocalBottomBarInset.current), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("الإجمالي", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.End) {

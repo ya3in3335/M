@@ -105,7 +105,7 @@ fun AdminProductsScreen(nav: NavHostController, asTab: Boolean = false) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = { Box(Modifier.statusBarsPadding()) { MedkTopBar("إدارة المنتجات", onBack = if (asTab) null else ({ nav.popBackStack() })) } },
         floatingActionButton = {
-            ExtendedFloatingActionButton(onClick = { nav.navigate(Routes.productEdit()) }, shape = MedkShapes.ChamferSm, containerColor = MedkColors.Purple, contentColor = Color.White,
+            ExtendedFloatingActionButton(onClick = { nav.navigate(Routes.productEdit()) }, modifier = Modifier.padding(bottom = com.medk.app.ui.components.LocalBottomBarInset.current), shape = MedkShapes.ChamferSm, containerColor = MedkColors.Purple, contentColor = Color.White,
                 icon = { Icon(Icons.Filled.Add, null) }, text = { Text("منتج جديد") })
         },
     ) { pad ->
@@ -117,7 +117,7 @@ fun AdminProductsScreen(nav: NavHostController, asTab: Boolean = false) {
                 if (d.allowed != null && d.allowed.isEmpty()) EmptyBox(Icons.Filled.Inventory2, "لا توجد أقسام مسموحة",
                     "اطلب من المالك منحك صلاحية على أقسام محددة")
                 else if (list.isEmpty()) EmptyBox(Icons.Filled.Inventory2, "لا توجد منتجات", "أضف منتجك الأول بالضغط على «منتج جديد»")
-                else LazyColumn(contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 96.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                else LazyColumn(contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 96.dp + com.medk.app.ui.components.LocalBottomBarInset.current), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(list, key = { it.id }) { p ->
                         MedkCard(onClick = { nav.navigate(Routes.productEdit(p.id)) }, padding = PaddingValues(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {

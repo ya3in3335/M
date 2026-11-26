@@ -134,7 +134,7 @@ fun HomeScreen(nav: NavHostController, onMenu: () -> Unit, unread: Int) {
                     repeat(5) { Shimmer(Modifier.fillMaxWidth().height(72.dp)); Spacer(Modifier.height(10.dp)) }
                 }
                 is UiState.Error -> ErrorBox(s.message, { vm.load() })
-                is UiState.Success -> LazyColumn(contentPadding = PaddingValues(16.dp, 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                is UiState.Success -> LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp + com.medk.app.ui.components.LocalBottomBarInset.current), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     item { BannerPager(s.data.banners) { slug -> if (slug != null) nav.navigate(Routes.category(slug)) else nav.toTab(Routes.CATEGORIES) } }
                     item { SectionHeader("خدماتنا الرئيسية", action = "عرض الكل", onAction = { nav.toTab(Routes.CATEGORIES) }, index = 1) }
                     items(s.data.categories.size, key = { s.data.categories[it].id }) { i ->

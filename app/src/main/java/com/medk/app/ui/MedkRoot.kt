@@ -72,6 +72,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.WindowInsets
+import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.haze
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.shadow
@@ -279,12 +282,16 @@ private fun AppShell(profile: Profile, pendingLink: MutableStateFlow<PendingLink
             }
         }
     }) {
-        Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
-            bottomBar = { if (route in Routes.tabs) BottomBar(route, cartCount) { nav.toTab(it) } },
-        ) { pad ->
+        val hazeState = remember { dev.chrisbanes.haze.HazeState() }
+        val showBar = route in Routes.tabs
+        val inset = glassBarInset()
+        CompositionLocalProvider(
+            com.medk.app.ui.components.LocalHazeState provides hazeState,
+            com.medk.app.ui.components.LocalBottomBarInset provides if (showBar) inset else 0.dp,
+        ) { Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             NavHost(
-                nav, if (isTeam) Routes.WORKSPACE else Routes.HOME, Modifier.padding(bottom = pad.calculateBottomPadding()),
+                nav, if (isTeam) Routes.WORKSPACE else Routes.HOME,
+                Modifier.fillMaxSize().haze(hazeState).let { if (showBar) it else it.navigationBarsPadding() },
                 enterTransition = { slideIn() }, exitTransition = { fadeOut(tween(200)) },
                 popEnterTransition = { fadeIn(tween(250)) }, popExitTransition = { slideOut() },
             ) {
@@ -300,7 +307,8 @@ private fun AppShell(profile: Profile, pendingLink: MutableStateFlow<PendingLink
                 composable(Routes.ADMIN_PRODUCTS) { AdminProductsScreen(nav) }
                 detailRoutes(nav)
             }
-        }
+            if (showBar) Box(Modifier.align(Alignment.BottomCenter)) { BottomBar(route, cartCount) { nav.toTab(it) } }
+        } }
     }
 }
 
@@ -362,31 +370,36 @@ private fun BottomBar(current: String?, cartCount: Int, onSelect: (String) -> Un
     ClassicNavBar(tabs, current, mapOf(Routes.CART to cartCount), onSelect)
 }
 
-/** Floating, pill-shaped "glass" bottom bar (shared by the store and owner apps). */
+/** Floating, pill-shaped frosted-glass bottom bar (shared by the store and owner apps). */
 @Composable
 fun ClassicNavBar(tabs: List<Tab>, current: String?, badges: Map<String, Int>, onSelect: (String) -> Unit) {
     val dark = com.medk.app.ui.theme.LocalIsDark.current
+    val haze = com.medk.app.ui.components.LocalHazeState.current
     val pill = RoundedCornerShape(50)
-    val glassFill = if (dark) Brush.verticalGradient(listOf(Color(0xFF2A2340).copy(alpha = .78f), Color(0xFF15121F).copy(alpha = .70f)))
-                    else Brush.verticalGradient(listOf(Color.White.copy(alpha = .92f), Color(0xFFF1ECFA).copy(alpha = .80f)))
-    val sheen = Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) .10f else .55f), Color.Transparent), endY = 90f)
-    val rim = Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) .28f else .9f), MedkColors.Violet.copy(alpha = .22f)))
-    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp)) {
+    val glass = dev.chrisbanes.haze.HazeStyle(
+        backgroundColor = MaterialTheme.colorScheme.background,
+        tint = dev.chrisbanes.haze.HazeTint(if (dark) Color.White.copy(alpha = .07f) else Color.White.copy(alpha = .40f)),
+        blurRadius = 24.dp, noiseFactor = .04f,
+        fallbackTint = dev.chrisbanes.haze.HazeTint(if (dark) Color(0xFF221D30).copy(alpha = .80f) else Color.White.copy(alpha = .80f)),
+    )
+    val sheen = Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) .12f else .50f), Color.White.copy(alpha = .02f)))
+    val rim = Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) .35f else .95f), Color.White.copy(alpha = if (dark) .06f else .35f)))
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 18.dp, vertical = 10.dp)) {
         Row(
-            Modifier.fillMaxWidth().height(66.dp)
-                .shadow(18.dp, pill, ambientColor = MedkColors.Purple.copy(alpha = .35f), spotColor = MedkColors.Purple.copy(alpha = .45f))
-                .clip(pill).background(glassFill).background(sheen).border(1.dp, rim, pill)
+            Modifier.fillMaxWidth().height(64.dp).clip(pill)
+                .let { m -> if (haze != null) m.then(Modifier.hazeChild(haze, glass)) else m.background(glass.fallbackTint!!.color) }
+                .background(sheen).border(1.dp, rim, pill)
                 .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             tabs.forEach { t ->
                 val sel = current == t.route
                 val bg by androidx.compose.animation.animateColorAsState(
-                    if (sel) MedkColors.Purple.copy(alpha = if (dark) .55f else .16f) else Color.Transparent, label = "tabBg")
+                    if (sel) MedkColors.Purple.copy(alpha = if (dark) .45f else .18f) else Color.Transparent, label = "tabBg")
                 val tint by androidx.compose.animation.animateColorAsState(
-                    if (sel) (if (dark) Color.White else MedkColors.Purple) else MaterialTheme.colorScheme.onSurfaceVariant, label = "tabTint")
+                    if (sel) (if (dark) Color.White else MedkColors.Purple) else MaterialTheme.colorScheme.onSurface.copy(alpha = .72f), label = "tabTint")
                 Column(
-                    Modifier.weight(1f).height(54.dp).clip(pill).background(bg)
+                    Modifier.weight(1f).height(52.dp).clip(pill).background(bg)
                         .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             indication = null) { onSelect(t.route) },
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
@@ -401,3 +414,8 @@ fun ClassicNavBar(tabs: List<Tab>, current: String?, badges: Map<String, Int>, o
         }
     }
 }
+
+/** Total vertical space the floating bar covers (bar + margins + system navigation bar). */
+@Composable
+fun glassBarInset(): androidx.compose.ui.unit.Dp =
+    84.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()

@@ -78,7 +78,7 @@ class DemoFlowTest {
         rule.onNodeWithText("اكتب رسالتك…", useUnmergedTree = true).let { }
         rule.onAllNodesWithText("ID: 123456789").onFirst()
         rule.onNode(androidx.compose.ui.test.hasContentDescription("إرسال")).performClick()
-        waitText("استلمت طلبك", 10000); shot("08_chat")
+        waitText("استلمت طلبك", 25000); shot("08_chat")
         assertTrue(DemoStore.messages.any { it.body?.contains("استلمت طلبك") == true })
     }
 

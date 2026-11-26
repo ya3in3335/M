@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.navigationBarsPadding
+import dev.chrisbanes.haze.haze
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -131,15 +133,15 @@ fun OwnerAppShell(profile: Profile, pendingLink: MutableStateFlow<PendingLink?>)
         Tab(Routes.ADMIN_PRODUCTS, "المنتجات", Icons.Outlined.Inventory2, Icons.Filled.Inventory2),
         Tab(Routes.ADMIN_MORE, "المزيد", Icons.Filled.MoreHoriz, Icons.Filled.MoreHoriz),
     )
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = {
-            if (tabs.any { it.route == route }) ClassicNavBar(tabs, route, mapOf(Routes.ADMIN_MORE to unread)) { r ->
-                nav.toTab(if (r == Routes.ADMIN_ORDERS) Routes.adminOrders() else r)
-            }
-        },
-    ) { pad ->
-        NavHost(nav, Routes.WORKSPACE, Modifier.padding(bottom = pad.calculateBottomPadding())) {
+    val hazeState = remember { dev.chrisbanes.haze.HazeState() }
+    val showBar = tabs.any { it.route == route }
+    val inset = com.medk.app.ui.glassBarInset()
+    androidx.compose.runtime.CompositionLocalProvider(
+        com.medk.app.ui.components.LocalHazeState provides hazeState,
+        com.medk.app.ui.components.LocalBottomBarInset provides if (showBar) inset else 0.dp,
+    ) { Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        NavHost(nav, Routes.WORKSPACE, Modifier.fillMaxSize().then(Modifier.haze(hazeState))
+            .let { if (showBar) it else it.then(Modifier.navigationBarsPadding()) }) {
             composable(Routes.WORKSPACE) { WorkspaceScreen(nav, null) }
             composable(Routes.ADMIN_ORDERS, listOf(navArgument("status") { type = NavType.StringType; nullable = true; defaultValue = null })) {
                 AdminOrdersScreen(nav, it.arguments?.getString("status"), asTab = true)
@@ -149,7 +151,12 @@ fun OwnerAppShell(profile: Profile, pendingLink: MutableStateFlow<PendingLink?>)
             composable(Routes.ADMIN_MORE) { AdminMoreScreen(nav, profile, unread) }
             detailRoutes(nav)
         }
-    }
+        if (showBar) Box(Modifier.align(Alignment.BottomCenter)) {
+            ClassicNavBar(tabs, route, mapOf(Routes.ADMIN_MORE to unread)) { r ->
+                nav.toTab(if (r == Routes.ADMIN_ORDERS) Routes.adminOrders() else r)
+            }
+        }
+    } }
 }
 
 /** Shown when a non-owner signs into the owner app. */
@@ -171,7 +178,7 @@ fun AdminMoreScreen(nav: NavHostController, profile: Profile, unread: Int) {
     val ctx = LocalContext.current
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         MedkTopBar("المزيد")
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + com.medk.app.ui.components.LocalBottomBarInset.current), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             MedkCard {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     MedkMark(44.dp)

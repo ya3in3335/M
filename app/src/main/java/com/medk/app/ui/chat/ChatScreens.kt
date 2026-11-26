@@ -148,7 +148,7 @@ fun ConversationsScreen(nav: NavHostController, onMenu: (() -> Unit)?, showBack:
             StateView(state, { vm.load() }) { list ->
                 if (list.isEmpty()) EmptyBox(Icons.Filled.Forum, "لا توجد محادثات بعد",
                     "عند إتمام طلب أو التواصل مع بائع ستظهر المحادثة هنا", "تواصل مع الدعم", { openSupport(nav, scope, toast) })
-                else LazyColumn(contentPadding = PaddingValues(16.dp, 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                else LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp + com.medk.app.ui.components.LocalBottomBarInset.current), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(list, key = { it.conv.id }) { item -> ConversationRow(item, me) { nav.navigate(Routes.chat(item.conv.id)) } }
                 }
             }

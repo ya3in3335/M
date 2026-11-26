@@ -96,7 +96,7 @@ fun CategoriesScreen(nav: NavHostController, onMenu: () -> Unit) {
             navigationIcon = { IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, "القائمة") } },
             actions = { IconButton(onClick = { nav.navigate(Routes.SEARCH) }) { Icon(Icons.Filled.Search, "بحث") } })
         StateView(state, { vm.load() }) { (cats, sections) ->
-            LazyVerticalGrid(GridCells.Fixed(2), contentPadding = PaddingValues(16.dp),
+            LazyVerticalGrid(GridCells.Fixed(2), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + com.medk.app.ui.components.LocalBottomBarInset.current),
                 horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(cats, key = { it.id }) { cat ->
                     CategoryTile(cat, sections.count { it.categoryId == cat.id && it.isActive }) { nav.navigate(Routes.category(cat.slug)) }

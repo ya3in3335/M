@@ -122,7 +122,7 @@ fun ProfileScreen(nav: NavHostController, onMenu: () -> Unit) {
     val unread by c.notifications.unread.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         MedkTopBar("حسابي", navigationIcon = { IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, "القائمة") } })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + com.medk.app.ui.components.LocalBottomBarInset.current), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth().clip(MedkShapes.Chamfer).background(MedkColors.PrimaryGradient).padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(56.dp).clip(MedkShapes.Emblem).background(Color.White.copy(.25f)), contentAlignment = Alignment.Center) {
