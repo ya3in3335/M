@@ -174,6 +174,7 @@ dependencies {
     implementation(libs.googleid)
 
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.messaging)
     implementation(libs.firebase.appcheck.playintegrity)
     debugImplementation(libs.firebase.appcheck.debug)
 

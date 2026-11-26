@@ -1,0 +1,6 @@
+# MED-K instant-notification server (Cloudflare Workers, free plan).
+# Deployed by ../setup-push.sh — PROJECT_ID is passed at deploy time, SA_KEY is a Worker secret.
+name = "medk-push"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+workers_dev = true

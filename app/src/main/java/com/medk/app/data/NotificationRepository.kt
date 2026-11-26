@@ -66,6 +66,8 @@ open class NotificationRepository(private val c: AppContainer) {
         _unread.value = list.count { !it.isRead }
         list.filter { !it.isRead && it.createdAt > startedAt && shown.add(it.id) }.forEach { n ->
             if (n.conversationId != null && n.conversationId == activeConversationId) return@forEach
+            // With instant (FCM) notifications active the server delivers alerts; avoid duplicates.
+            if (c.push.isActive) return@forEach
             c.appScope.launch { if (c.settings.notificationsEnabled.first()) show(n) }
         }
     }
@@ -119,6 +121,11 @@ open class NotificationRepository(private val c: AppContainer) {
         regs.forEach { it.remove() }; regs = emptyList()
         orderDocs = emptyList(); convDocs = emptyList(); shown.clear(); uidNow = null
         _unread.value = 0
+    }
+
+    /** Shows an instant notification received while the app is open (respects the user's setting). */
+    fun showPush(n: AppNotification) {
+        c.appScope.launch { if (c.settings.notificationsEnabled.first()) show(n) }
     }
 
     @SuppressLint("MissingPermission")

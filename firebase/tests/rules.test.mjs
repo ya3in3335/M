@@ -203,6 +203,38 @@ describe("security rules (free plan)", () => {
     });
   });
 
+  describe("instant notifications", () => {
+    const tok = (o = {}) => ({ uid: "cust", token: "fcm-token-0123456789abcdefghij", app: "store", updatedAt: serverTimestamp(), ...o });
+    it("a user registers and removes his own device token", async () => {
+      await assertSucceeds(setDoc(doc(as("cust"), "pushTokens/t1"), tok()));
+      await assertSucceeds(getDoc(doc(as("cust"), "pushTokens/t1")));
+      await assertSucceeds(setDoc(doc(as("cust"), "pushTokens/t1"), tok({ app: "store" })));
+      await assertSucceeds(deleteDoc(doc(as("cust"), "pushTokens/t1")));
+    });
+    it("nobody registers, reads, lists or deletes someone else's tokens", async () => {
+      await assertFails(setDoc(doc(as("cust"), "pushTokens/t2"), tok({ uid: "cust2" })));
+      await assertSucceeds(setDoc(doc(as("cust2"), "pushTokens/t2"), tok({ uid: "cust2" })));
+      await assertFails(getDoc(doc(as("cust"), "pushTokens/t2")));
+      await assertFails(getDoc(doc(as("owner"), "pushTokens/t2")));
+      await assertFails(getDocs(collection(as("owner"), "pushTokens")));
+      await assertFails(setDoc(doc(as("cust"), "pushTokens/t2"), tok()));
+      await assertFails(deleteDoc(doc(as("cust"), "pushTokens/t2")));
+    });
+    it("token documents are strictly validated; suspended users cannot register", async () => {
+      await assertFails(setDoc(doc(as("cust"), "pushTokens/t3"), tok({ app: "other" })));
+      await assertFails(setDoc(doc(as("cust"), "pushTokens/t3"), { ...tok(), extra: 1 }));
+      await assertFails(setDoc(doc(as("cust"), "pushTokens/t3"), tok({ token: "x" })));
+      await assertFails(setDoc(doc(as("banned"), "pushTokens/t3"), tok({ uid: "banned" })));
+      await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), "pushTokens/t3"), tok()));
+    });
+    it("config is readable when signed in and never writable from the app", async () => {
+      await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), "config/push"), { url: "https://x.workers.dev" }); });
+      await assertSucceeds(getDoc(doc(as("cust"), "config/push")));
+      await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), "config/push")));
+      await assertFails(setDoc(doc(as("owner"), "config/push"), { url: "https://evil.example" }));
+    });
+  });
+
   describe("catalog & permissions", () => {
     it("anyone reads the catalog", async () => { await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), "categories/gaming"))); });
     it("products: permission + section + valid fields", async () => {

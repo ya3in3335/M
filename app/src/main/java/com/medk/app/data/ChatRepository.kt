@@ -69,6 +69,7 @@ open class ChatRepository(private val c: AppContainer) {
         batch.update(convs().document(conversationId), mapOf("lastMessage" to preview.take(200),
             "lastMessageAt" to FieldValue.serverTimestamp(), "lastSenderId" to uid))
         batch.commit().await()
+        c.push.notify("message", "conversationId" to conversationId, "messageId" to ref.id)
         return Message(ref.id, conversationId, uid, body, attachment?.get("path"), attachment?.get("type"), attachment?.get("name"),
             java.time.OffsetDateTime.now().toString())
     }

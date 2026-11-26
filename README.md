@@ -133,3 +133,20 @@ cd firebase/tests && npm ci && npm run emulate
 ```bash
 ./gradlew recordRoborazziStoreProdDebug recordRoborazziStoreDemoDebug recordRoborazziAdminDemoDebug
 ```
+
+## الإشعارات الفورية (مجانية — Cloudflare Workers + FCM)
+
+تصل الإشعارات حتى والتطبيق مغلق: **طلب جديد** (للمالك والبائع)، **رسالة جديدة** (للطرف الآخر)، **تغيّر حالة الطلب** (للعميل)، **إسناد طلب** (للبائع).
+
+- التطبيق لا يرسل إشعاراً بنفسه؛ يخبر الخادم `firebase/push-worker` فقط بأنه أنشأ طلباً/رسالة.
+- الخادم يتحقق من هوية المستخدم (رمز Firebase)، ويعيد قراءة المستند من Firestore، ويتأكد أن المستخدم هو صاحبه وأن الحدث حديث (5 دقائق)، ثم يختار المستلمين بنفسه ويرسل.
+- رموز الأجهزة في `pushTokens` لا يقرؤها أحد من التطبيق؛ كل مستخدم يسجّل/يحذف رمز جهازه فقط.
+- عنوان الخادم محفوظ في `config/push` ويقرؤه التطبيق تلقائياً (لا حاجة لإعادة البناء).
+
+**التفعيل (مرة واحدة):** أنشئ مفتاح Cloudflare بالقالب «Edit Cloudflare Workers» ثم في Cloud Shell:
+
+```bash
+rm -rf medk-app && git clone -b ccr-d079e25d-odpocv https://github.com/ya3in3335/M medk-app && OWNER_EMAILS=you@mail.com bash medk-app/firebase/setup-push.sh <PROJECT_ID>
+```
+
+اختبارات الخادم: `node firebase/push-worker/test/worker.test.mjs`

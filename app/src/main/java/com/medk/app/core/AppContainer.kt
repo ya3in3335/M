@@ -48,5 +48,6 @@ class AppContainer(val context: Context) {
     val orders: OrderRepository by lazy { if (isDemo) DemoOrderRepository(this) else OrderRepository(this) }
     val chat: ChatRepository by lazy { if (isDemo) DemoChatRepository(this) else ChatRepository(this) }
     val admin: AdminRepository by lazy { if (isDemo) DemoAdminRepository(this) else AdminRepository(this) }
+    val push by lazy { com.medk.app.data.PushRepository(this) }
     val notifications: NotificationRepository by lazy { if (isDemo) DemoNotificationRepository(this) else NotificationRepository(this) }
 }

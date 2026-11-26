@@ -93,6 +93,7 @@ open class AuthRepository(private val c: AppContainer) {
         }
         if (p.roleEnum == Role.OWNER) runCatching { seedCatalogIfEmpty() }
         c.notifications.start(p.id)
+        c.push.register(p.id)
         return p
     }
 
@@ -228,6 +229,7 @@ open class AuthRepository(private val c: AppContainer) {
 
     open suspend fun signOut(context: Context) {
         c.notifications.stop()
+        c.push.unregister()
         c.firebaseAuth?.signOut()
         runCatching { CredentialManager.create(context).clearCredentialState(androidx.credentials.ClearCredentialStateRequest()) }
         c.cart.clear()

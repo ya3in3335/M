@@ -28,6 +28,10 @@ jobs:
           npm run rules
           npx firebase emulators:exec --project demo-medk --config ../firebase.json --only firestore "npm test"
 
+      - name: Push server tests (offline, mocked Google APIs)
+        working-directory: firebase/push-worker
+        run: node test/worker.test.mjs
+
   # Manual deployment of rules + indexes (Actions → Run workflow). Works on the free plan.
   deploy-backend:
     if: github.event_name == 'workflow_dispatch'

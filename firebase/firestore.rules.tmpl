@@ -286,6 +286,27 @@ service cloud.firestore {
       }
     }
 
+    // Instant notifications: each device registers its own FCM token (doc id = sha256(token)).
+    // Only the push server (service account, bypasses rules) reads them to deliver notifications.
+    match /pushTokens/{id} {
+      function validToken() {
+        return d().keys().hasOnly(['uid', 'token', 'app', 'updatedAt'])
+          && d().uid == uid() && d().token is string && d().token.size() > 20 && d().token.size() <= 400
+          && d().app in ['store', 'admin'] && now(d().updatedAt);
+      }
+      allow get: if signedIn() && resource.data.uid == uid();
+      allow list: if false;
+      allow create: if active() && validToken();
+      allow update: if active() && resource.data.uid == uid() && validToken();
+      allow delete: if signedIn() && resource.data.uid == uid();
+    }
+
+    // Public app configuration (e.g. the push server URL). Written only by the setup script (admin).
+    match /config/{id} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

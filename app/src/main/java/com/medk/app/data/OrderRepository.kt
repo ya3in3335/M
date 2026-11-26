@@ -42,6 +42,7 @@ open class OrderRepository(private val c: AppContainer) {
         if ((status == OrderStatus.DELIVERED || status == OrderStatus.CLOSED) && o.deliveredAt == null) patch["deliveredAt"] = now
         if (status == OrderStatus.CLOSED) patch["closedAt"] = now
         db.collection("orders").document(orderId).update(patch).await()
+        c.push.notify("status", "orderId" to orderId)
     }
 
     open suspend fun assignStaff(orderId: String, staffId: String?) {
@@ -50,6 +51,7 @@ open class OrderRepository(private val c: AppContainer) {
         db.collection("conversations").whereEqualTo("orderId", orderId).get().await().documents
             .forEach { batch.update(it.reference, "staffId", staffId) }
         batch.commit().await()
+        if (staffId != null) c.push.notify("assigned", "orderId" to orderId)
     }
 
     private fun reference(): String {
@@ -99,6 +101,7 @@ open class OrderRepository(private val c: AppContainer) {
                 batch.set(convRef.collection("messages").document(), mapOf("senderId" to uid, "body" to body, "attachment" to null, "createdAt" to now))
                 batch.commit().await()
                 created += CreatedOrder(orderRef.id, convRef.id, ref)
+                c.push.notify("order", "orderId" to orderRef.id)
             } catch (e: Exception) {
                 failures += line.name
                 if (created.isEmpty() && line == lines.last()) throw e
