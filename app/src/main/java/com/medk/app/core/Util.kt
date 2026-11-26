@@ -45,6 +45,8 @@ fun Throwable.friendly(): String {
             m.contains("forbidden") || m.contains("owner only") ->
             "ليست لديك صلاحية لتنفيذ هذا الإجراء."
         m.contains("unauthenticated") || m.contains("401") -> "انتهت الجلسة، يرجى تسجيل الدخول مجدداً."
+        m.contains("requires an index") || m.contains("index is currently building") ->
+            "قاعدة البيانات قيد التجهيز (الفهارس). أعد المحاولة بعد دقائق."
         m.contains("cannot change an owner") -> "لا يمكن تعديل حساب المالك."
         m.contains("not a seller") || m.contains("target is not a seller") -> "هذا الحساب ليس بائعاً."
         else -> message?.take(160) ?: "حدث خطأ غير متوقع."

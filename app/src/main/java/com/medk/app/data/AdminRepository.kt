@@ -20,18 +20,27 @@ open class AdminRepository(private val c: AppContainer) {
         val owner = c.auth.profile?.roleEnum == Role.OWNER
         if (!owner && c.auth.profile?.canViewStats != true) error("forbidden")
         val orders = if (owner) db.collection("orders") else db.collection("orders").whereEqualTo("staffId", uid)
-        suspend fun count(q: com.google.firebase.firestore.Query) =
+        // Each figure is independent: a missing index or a transient error only zeroes that tile
+        // instead of failing the whole dashboard.
+        suspend fun count(q: com.google.firebase.firestore.Query): Int = runCatching {
             q.count().get(com.google.firebase.firestore.AggregateSource.SERVER).await().count.toInt()
-        val rev = orders.whereIn("status", listOf("paid", "delivered", "closed"))
-            .aggregate(com.google.firebase.firestore.AggregateField.sum("totalUsd"), com.google.firebase.firestore.AggregateField.sum("totalDzd"))
-            .get(com.google.firebase.firestore.AggregateSource.SERVER).await()
+        }.getOrElse { android.util.Log.w("MedkStats", "count failed", it); 0 }
+        val paidLike = orders.whereIn("status", listOf("paid", "delivered", "closed"))
+        suspend fun revenue(field: String): Double = runCatching {
+            val f = com.google.firebase.firestore.AggregateField.sum(field)
+            paidLike.aggregate(f).get(com.google.firebase.firestore.AggregateSource.SERVER).await().getDouble(f) ?: 0.0
+        }.recoverCatching {
+            // Fallback without a composite index: sum client-side (bounded).
+            android.util.Log.w("MedkStats", "sum($field) aggregation failed, summing locally", it)
+            paidLike.limit(2000).get().await().documents.sumOf { d -> d.getDouble(field) ?: 0.0 }
+        }.getOrElse { android.util.Log.w("MedkStats", "revenue failed", it); 0.0 }
         val convs = if (owner) db.collection("conversations") else db.collection("conversations").whereEqualTo("staffId", uid)
         return DashboardStats(
             totalOrders = count(orders), openOrders = count(orders.whereEqualTo("status", "open")),
             paidOrders = count(orders.whereEqualTo("status", "paid")), deliveredOrders = count(orders.whereEqualTo("status", "delivered")),
             closedOrders = count(orders.whereEqualTo("status", "closed")),
-            revenueUsd = rev.getDouble(com.google.firebase.firestore.AggregateField.sum("totalUsd")) ?: 0.0,
-            revenueDzd = rev.getDouble(com.google.firebase.firestore.AggregateField.sum("totalDzd")) ?: 0.0,
+            revenueUsd = revenue("totalUsd"),
+            revenueDzd = revenue("totalDzd"),
             openConversations = count(convs),
             unassignedOrders = if (owner) count(db.collection("orders").whereEqualTo("staffId", null)
                 .whereIn("status", listOf("open", "paid", "delivered"))) else 0,
