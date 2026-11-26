@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # MED-K — إنشاء مشروع Firebase جديد وتجهيزه بالكامل (مجاني، بدون بطاقة دفع) من Google Cloud Shell.
 # الاستعمال:  bash setup-project.sh [PROJECT_ID]
+# لمالك ببريد مختلف عن حساب Cloud Shell:  OWNER_EMAILS=you@mail.com bash setup-project.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -15,7 +16,9 @@ P="$(echo "${1:-medk-app-$(date +%y%m%d)-$((RANDOM % 9000 + 1000))}" | tr 'A-Z' 
 SHA1="D2:19:CF:59:3E:7D:1D:CC:AF:1B:3F:7D:84:CB:1D:D3:A2:8B:7D:EB"
 SHA256="27:C7:47:8C:15:04:DA:DD:20:EA:E5:92:49:D0:A1:6C:FB:9D:53:C6:DF:DD:53:9C:E2:8E:F4:9F:98:1B:51:2A"
 
+OWNER="${OWNER_EMAILS:-$ACCOUNT}"
 say "الحساب: $ACCOUNT"
+say "بريد المالك: $OWNER"
 say "المشروع: $P (الاسم: MED-K)"
 
 say "1/8 إنشاء المشروع…"
@@ -71,8 +74,8 @@ for PKG in com.medk.app com.medk.admin; do
   ok "$PKG"
 done
 
-say "8/8 نشر قواعد الحماية (بريد المالك: $ACCOUNT)…"
-OWNER_EMAILS="$ACCOUNT" bash deploy.sh "$P" >/dev/null && ok "تم" || die "فشل نشر القواعد."
+say "8/8 نشر قواعد الحماية (بريد المالك: $OWNER)…"
+OWNER_EMAILS="$OWNER" bash deploy.sh "$P" >/dev/null && ok "تم" || die "فشل نشر القواعد."
 
 printf '\n\033[1;33m══════════════════════════════════════════════\n'
 printf ' خطوة يدوية واحدة (Google لا يسمح بها برمجياً):\n'
