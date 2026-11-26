@@ -17,8 +17,7 @@ SANDBOX="${SANDBOX:-0}"
 say "المشروع: $P $( [ "$SANDBOX" = 1 ] && echo '(وضع تجريبي)' )"
 
 say "1/4 مفتاح Cloudflare"
-echo "الصق مفتاح Cloudflare ثم Enter (لن يظهر):"
-read -rs CF_TOKEN; echo
+if [ -z "${CF_TOKEN:-}" ]; then echo "الصق مفتاح Cloudflare ثم Enter (لن يظهر):"; read -rs CF_TOKEN; echo; fi
 CF() { curl -fsS -H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json" "$@"; }
 CF https://api.cloudflare.com/client/v4/user/tokens/verify >/dev/null || die "مفتاح Cloudflare غير صالح."
 ACC=$(CF https://api.cloudflare.com/client/v4/accounts | python3 -c 'import json,sys; r=json.load(sys.stdin)["result"]; print(r[0]["id"] if r else "")')
@@ -28,12 +27,12 @@ SUB=$(CF "https://api.cloudflare.com/client/v4/accounts/$ACC/workers/subdomain" 
 ok "تم"
 
 say "2/4 مفتاح NOWPayments"
-echo "الصق مفتاح API من NOWPayments ثم Enter (لن يظهر):"
-read -rs NP_KEY; echo
+if [ -z "${NP_KEY:-}" ]; then echo "الصق مفتاح API من NOWPayments ثم Enter (لن يظهر):"; read -rs NP_KEY; echo; fi
+[ -n "$NP_KEY" ] || die "مفتاح NOWPayments فارغ."
 NPB=$([ "$SANDBOX" = 1 ] && echo https://api-sandbox.nowpayments.io/v1 || echo https://api.nowpayments.io/v1)
-curl -fsS -H "x-api-key: $NP_KEY" "$NPB/merchant/coins" | grep -qi usdttrc20 \
-  || die "مفتاح NOWPayments غير صالح، أو عملة USDT (TRC20) غير مفعّلة في حسابك (Settings ← Payment settings)."
-ok "المفتاح صالح وعملة USDT TRC20 مفعّلة"
+RESP=$(curl -sS -H "x-api-key: $NP_KEY" "$NPB/merchant/coins" || true)
+if echo "$RESP" | grep -qi usdttrc20; then ok "المفتاح صالح وعملة USDT TRC20 مفعّلة"
+else say "تنبيه: رد NOWPayments من Cloud Shell: ${RESP:0:200}"; say "نكمل — سيتحقق الخادم من المفتاح بعد النشر."; fi
 
 say "3/4 تحديث الخادم…"
 export CLOUDFLARE_API_TOKEN="$CF_TOKEN" CLOUDFLARE_ACCOUNT_ID="$ACC"
@@ -43,6 +42,7 @@ W="npx -y wrangler@3"
 URL="https://medk-push.$SUB.workers.dev"
 for i in 1 2 3 4 5 6; do curl -fsS "$URL/" 2>/dev/null | grep -q '"payments":true' && break; sleep 5; done
 curl -fsS "$URL/" | grep -q '"payments":true' && ok "الخادم جاهز للدفع: $URL" || say "تم النشر — قد يحتاج الخادم دقيقة."
+say "فحص المفتاح من خادم Cloudflare: $(curl -sS "$URL/paycheck" | head -c 300)"
 
 # الإعداد الافتراضي: الدفع مفعّل وعمولة 10% (لا يغيّر إعداداً موجوداً)
 curl -fsS -o /dev/null -X PATCH -H "Authorization: Bearer $(gcloud auth print-access-token)" -H "Content-Type: application/json" \

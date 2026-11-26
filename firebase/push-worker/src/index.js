@@ -22,6 +22,11 @@ export default {
     const url = new URL(req.url);
     if (req.method === "GET" && url.pathname === "/") return json({ ok: true, service: "medk-push", payments: !!env.NOWPAY_API_KEY });
     if (req.method === "GET" && url.pathname === "/paid") return donePage();
+    if (req.method === "GET" && url.pathname === "/paycheck") { // setup diagnostics: is the gateway key accepted? (no secrets returned)
+      try { const j = await nowpay(env, "/merchant/coins"); const list = (j.selectedCurrencies || []).map((x) => String(x).toLowerCase());
+        return json({ ok: true, usdttrc20: list.includes("usdttrc20") }); }
+      catch (e) { return json({ ok: false, error: e.message }); }
+    }
     try {
       if (req.method === "POST" && url.pathname === "/ipn") return await handleIpn(req, env, ctx);
       if (req.method === "POST" && ["/pay", "/withdraw", "/withdrawal"].includes(url.pathname)) {
