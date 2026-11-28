@@ -116,22 +116,20 @@ private fun validEmail(s: String) = Patterns.EMAIL_ADDRESS.matcher(s.trim()).mat
 
 // ================================================================= splash
 @Composable
-fun SplashScreen() {
-    val scale = remember { Animatable(.6f) }
-    val alpha = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        launch { scale.animateTo(1f, tween(700, easing = FastOutSlowInEasing)) }
-        alpha.animateTo(1f, tween(600))
-    }
+fun SplashScreen(onFinished: () -> Unit = {}) {
+    // The intro video plays once per app start; later splashes (e.g. while signing in) show the still logo.
+    if (com.medk.app.core.AppFlags.videoSplash && !SplashState.played) { VideoSplash { SplashState.played = true; onFinished() }; return }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(if (SplashState.played) 300L else com.medk.app.ui.system.LOGO_MOTION_MS.toLong()); onFinished() }
     val t = rememberInfiniteTransition(label = "dots")
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF160A2B), MedkColors.Black, MedkColors.Black))), contentAlignment = Alignment.Center) {
         // motion-graphics logo: appears, shatters, re-assembles (see LogoMotion.kt)
         val caption = remember { Animatable(0f) }
         LaunchedEffect(Unit) { kotlinx.coroutines.delay((com.medk.app.ui.system.LOGO_MOTION_MS * .78f).toLong()); caption.animateTo(1f, tween(500)) }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            com.medk.app.ui.system.LogoMotion(230.dp)
+            if (SplashState.played) MedkMark(120.dp) else com.medk.app.ui.system.LogoMotion(230.dp)
             Spacer(Modifier.height(18.dp))
-            Column(Modifier.alpha(caption.value).offset(y = ((1f - caption.value) * 12).dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.alpha(if (SplashState.played) 1f else caption.value).offset(y = ((1f - caption.value) * 12).dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Digital Services Marketplace", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -146,6 +144,48 @@ fun SplashScreen() {
                 Box(Modifier.size(9.dp).alpha(a).clip(CircleShape).background(MedkColors.Violet))
             }
         }
+    }
+}
+
+object SplashState { @Volatile var played = false }
+
+/** Full-screen, muted intro video (res/raw/medk_splash.mp4, ~3 s). Ends on its last frame; any error skips it. */
+@Composable
+private fun VideoSplash(onFinished: () -> Unit) {
+    val ctx = LocalContext.current
+    var done by remember { mutableStateOf(false) }
+    val finish = { if (!done) { done = true; onFinished() } }
+    val player = remember {
+        androidx.media3.exoplayer.ExoPlayer.Builder(ctx).build().apply {
+            setMediaItem(androidx.media3.common.MediaItem.fromUri(
+                androidx.media3.datasource.RawResourceDataSource.buildRawResourceUri(com.medk.app.R.raw.medk_splash)))
+            volume = 0f
+            prepare()
+            playWhenReady = true
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(player) {
+        val l = object : androidx.media3.common.Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) { if (state == androidx.media3.common.Player.STATE_ENDED) finish() }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) { finish() }
+        }
+        player.addListener(l)
+        onDispose { player.removeListener(l); player.release() }
+    }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(6000); finish() }   // safety net
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        androidx.compose.ui.viewinterop.AndroidView(
+            factory = { c ->
+                androidx.media3.ui.PlayerView(c).apply {
+                    useController = false
+                    resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    setShutterBackgroundColor(android.graphics.Color.BLACK)
+                    setKeepContentOnPlayerReset(true)
+                    this.player = player
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 }
 

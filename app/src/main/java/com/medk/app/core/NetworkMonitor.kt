@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.asStateFlow
 object AppFlags {
     @Volatile var strictNetwork = true
     @Volatile var updateChecks = true
+    /** Video splash (off under Robolectric tests, which have no video decoder). */
+    @Volatile var videoSplash = android.os.Build.FINGERPRINT != "robolectric"
 }
 
 /** Live "has working internet" state, used to block the app while offline. */

@@ -153,7 +153,7 @@ fun MedkRoot(pendingLink: MutableStateFlow<PendingLink?>) {
     MedkTheme(dark) {
         val auth by c.auth.state.collectAsStateWithLifecycle()
         var minSplash by remember { mutableStateOf(true) }
-        LaunchedEffect(Unit) { delay(com.medk.app.ui.system.LOGO_MOTION_MS + 300L); minSplash = false }
+        
         val snack = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
         val toast: (String) -> Unit = { m -> scope.launch { snack.currentSnackbarData?.dismiss(); snack.showSnackbar(m) } }
@@ -168,7 +168,7 @@ fun MedkRoot(pendingLink: MutableStateFlow<PendingLink?>) {
                 Crossfade(key, animationSpec = tween(450), label = "root") { k ->
                     val a = auth
                     when {
-                        k == "splash" -> SplashScreen()
+                        k == "splash" -> SplashScreen { minSplash = false }
                         a is AuthState.NotConfigured -> NotConfiguredScreen()
                         a is AuthState.VerifyEmail -> com.medk.app.ui.auth.VerifyEmailScreen(a.email)
                         a is AuthState.Failed -> AuthFailedScreen(a.message, { scope.launch { c.auth.restore() } },
