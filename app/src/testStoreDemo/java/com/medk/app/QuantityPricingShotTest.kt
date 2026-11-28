@@ -35,6 +35,14 @@ class QuantityPricingShotTest {
         rule.onRoot().captureRoboImage("screenshots/$name.png")
     }
 
+    @Test fun adminProductsFiltered() {
+        (MedkApp.container.auth as com.medk.app.data.demo.DemoAuthRepository).loginAs(com.medk.app.data.Role.OWNER)
+        rule.setContent { MedkTheme(true) { Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            com.medk.app.ui.admin.AdminProductsScreen(rememberNavController()) } } }
+        repeat(30) { org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(100)); rule.waitForIdle() }
+        rule.onRoot().captureRoboImage("screenshots/22_admin_products_filter.png")
+    }
+
     @Test fun packages() = shot("p1", "20_product_packages")
     @Test fun perUnit() = shot("p4", "21_product_per_unit")
 }

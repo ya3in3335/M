@@ -153,7 +153,7 @@ fun MedkRoot(pendingLink: MutableStateFlow<PendingLink?>) {
     MedkTheme(dark) {
         val auth by c.auth.state.collectAsStateWithLifecycle()
         var minSplash by remember { mutableStateOf(true) }
-        LaunchedEffect(Unit) { delay(1300); minSplash = false }
+        LaunchedEffect(Unit) { delay(com.medk.app.ui.system.LOGO_MOTION_MS + 300L); minSplash = false }
         val snack = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
         val toast: (String) -> Unit = { m -> scope.launch { snack.currentSnackbarData?.dismiss(); snack.showSnackbar(m) } }

@@ -98,6 +98,8 @@ fun AdminProductsScreen(nav: NavHostController, asTab: Boolean = false) {
     LifecycleResumeEffect(Unit) { vm.load(silent = true); onPauseOrDispose { } }
     val state by vm.state.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
+    var catFilter by rememberSaveable { mutableStateOf<String?>(null) }      // null = first category with products; "*" = all
+    var secFilter by rememberSaveable { mutableStateOf<String?>(null) }      // null = all sub-sections
     var toDelete by remember { mutableStateOf<Product?>(null) }
     val scope = rememberCoroutineScope()
     val toast = LocalToast.current
@@ -112,8 +114,39 @@ fun AdminProductsScreen(nav: NavHostController, asTab: Boolean = false) {
         Column(Modifier.padding(pad)) {
             StateView(state, { vm.load() }) { d ->
                 val sectionNames = d.sections.associate { it.id to it.name }
-                val list = d.products.filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) }
-                MedkTextField(query, { query = it }, "بحث في المنتجات", Modifier.padding(horizontal = 16.dp), leading = Icons.Filled.Search)
+                val cats = d.categories.filter { cat -> d.products.any { it.categoryId == cat.id } }
+                val cat = when (catFilter) { "*" -> null; null -> cats.firstOrNull()?.id; else -> catFilter }
+                val secsOfCat = d.sections.filter { s -> s.categoryId == cat && d.products.any { it.sectionId == s.id } }
+                val searching = query.isNotBlank()
+                // searching looks everywhere; otherwise only the chosen category / sub-section
+                val list = d.products.filter { p ->
+                    if (searching) p.name.contains(query.trim(), ignoreCase = true)
+                    else (cat == null || p.categoryId == cat) && (secFilter == null || p.sectionId == secFilter)
+                }
+                MedkTextField(query, { query = it }, "بحث في كل المنتجات", Modifier.padding(horizontal = 16.dp), leading = Icons.Filled.Search)
+                if (!searching && cats.isNotEmpty()) {
+                    androidx.compose.foundation.lazy.LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(cats, key = { "c-" + it.id }) { cg ->
+                            androidx.compose.material3.FilterChip(cat == cg.id, { catFilter = cg.id; secFilter = null },
+                                { Text("${cg.name} (${d.products.count { it.categoryId == cg.id }})") })
+                        }
+                        item(key = "all") {
+                            androidx.compose.material3.FilterChip(catFilter == "*", { catFilter = "*"; secFilter = null },
+                                { Text("الكل (${d.products.size})") })
+                        }
+                    }
+                    if (cat != null && secsOfCat.size > 1) androidx.compose.foundation.lazy.LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        item(key = "s-all") {
+                            androidx.compose.material3.FilterChip(secFilter == null, { secFilter = null }, { Text("كل الأقسام الفرعية") })
+                        }
+                        items(secsOfCat, key = { "s-" + it.id }) { sc ->
+                            androidx.compose.material3.FilterChip(secFilter == sc.id, { secFilter = sc.id },
+                                { Text("${sc.name} (${d.products.count { it.sectionId == sc.id }})") })
+                        }
+                    }
+                }
                 if (d.allowed != null && d.allowed.isEmpty()) EmptyBox(Icons.Filled.Inventory2, "لا توجد أقسام مسموحة",
                     "اطلب من المالك منحك صلاحية على أقسام محددة")
                 else if (list.isEmpty()) EmptyBox(Icons.Filled.Inventory2, "لا توجد منتجات", "أضف منتجك الأول بالضغط على «منتج جديد»")

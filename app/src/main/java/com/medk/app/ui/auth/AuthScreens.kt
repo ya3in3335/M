@@ -125,10 +125,20 @@ fun SplashScreen() {
     }
     val t = rememberInfiniteTransition(label = "dots")
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF160A2B), MedkColors.Black, MedkColors.Black))), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.scale(scale.value).alpha(alpha.value)) {
-            MedkMark(88.dp)
-            Spacer(Modifier.height(16.dp))
-            MedkWordmark(30.sp, subtitle = true)
+        // motion-graphics logo: appears, shatters, re-assembles (see LogoMotion.kt)
+        val caption = remember { Animatable(0f) }
+        LaunchedEffect(Unit) { kotlinx.coroutines.delay((com.medk.app.ui.system.LOGO_MOTION_MS * .78f).toLong()); caption.animateTo(1f, tween(500)) }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            com.medk.app.ui.system.LogoMotion(230.dp)
+            Spacer(Modifier.height(18.dp))
+            Column(Modifier.alpha(caption.value).offset(y = ((1f - caption.value) * 12).dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Digital Services Marketplace", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("بالتعاون مع  ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    com.medk.app.ui.components.AppNovaMark(15.sp)
+                }
+            }
         }
         Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 72.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             repeat(3) { i ->

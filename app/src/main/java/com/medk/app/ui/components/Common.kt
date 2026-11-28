@@ -130,13 +130,16 @@ fun AppNovaMark(fontSize: TextUnit = 18.sp, modifier: Modifier = Modifier) {
     }
 }
 
-/** Classic app logo: "MK" on a rounded purple tile. */
+/** App logo: the MED-K artwork on a dark glass tile with a glowing purple frame. */
 @Composable
 fun MedkMark(size: Dp = 64.dp, modifier: Modifier = Modifier) {
-    Box(modifier.size(size).clip(MedkShapes.Logo).background(Brush.linearGradient(listOf(MedkColors.Violet, MedkColors.Purple))),
+    Box(modifier.size(size).clip(MedkShapes.Logo)
+        .background(Brush.radialGradient(listOf(Color(0xFF1C0B33), Color(0xFF07040E))))
+        .border(androidx.compose.foundation.BorderStroke((size.value / 48f).coerceAtLeast(1f).dp,
+            Brush.linearGradient(listOf(MedkColors.Violet, MedkColors.Purple.copy(.3f), MedkColors.Violet))), MedkShapes.Logo),
         contentAlignment = Alignment.Center) {
-        Text("MK", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = (size.value * 0.36f).sp,
-            letterSpacing = (-1).sp, style = MaterialTheme.typography.titleLarge.copy(lineHeight = (size.value * 0.42f).sp))
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.medk.app.R.drawable.medk_logo_art), "MED-K",
+            Modifier.padding(size * .1f))
     }
 }
 

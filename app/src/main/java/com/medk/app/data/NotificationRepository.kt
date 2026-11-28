@@ -140,7 +140,7 @@ open class NotificationRepository(private val c: AppContainer) {
         }
         val pi = PendingIntent.getActivity(ctx, n.id.hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val notif = NotificationCompat.Builder(ctx, MedkApp.CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_stat_medk)
             .setContentTitle(n.title).setContentText(n.body)
             .setAutoCancel(true).setContentIntent(pi).build()
         NotificationManagerCompat.from(ctx).notify(n.id.hashCode(), notif)
