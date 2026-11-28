@@ -176,11 +176,35 @@ fun ProductEditScreen(id: String?, nav: NavHostController) {
             var priceDzd by rememberSaveable { mutableStateOf(existing?.priceDzd?.plain() ?: "") }
             var stock by rememberSaveable { mutableStateOf(existing?.stock?.toString() ?: "") }
             var available by rememberSaveable { mutableStateOf(existing?.isAvailable ?: true) }
+            var pricing by rememberSaveable { mutableStateOf(existing?.pricing ?: com.medk.app.data.Product.PRICING_FIXED) }
+            var unit by rememberSaveable { mutableStateOf(existing?.unit ?: "") }
+            var inputLabel by rememberSaveable { mutableStateOf(existing?.inputLabel ?: "") }
+            var unitBase by rememberSaveable { mutableStateOf(existing?.unitBase?.takeIf { existing.isPerUnit }?.toString() ?: "100") }
+            var minAmount by rememberSaveable { mutableStateOf(existing?.minAmount?.toString() ?: "") }
+            var maxAmount by rememberSaveable { mutableStateOf(existing?.maxAmount?.toString() ?: "") }
+            // packages editor rows: amount, DZD, USD (text)
+            val pkgs = remember { mutableStateListOf<Triple<String, String, String>>().apply {
+                existing?.packages?.forEach { add(Triple(it.amount.toString(), it.priceDzd.plain(), it.priceUsd.plain())) }
+                if (isEmpty()) add(Triple("", "", ""))
+            } }
+            val parsedPkgs = pkgs.mapNotNull { (a, dz, us) ->
+                val am = a.toIntOrNull(); val pd = dz.toPriceOrNull(); val pu = us.toPriceOrNull()
+                if (am != null && am > 0 && pd != null && pu != null) com.medk.app.data.PricePackage(am, pd, pu) else null
+            }.sortedBy { it.amount }
             val images = remember { mutableStateListOf<String>().apply { existing?.images?.let { addAll(it) } } }
             val sectionsForCat = allowedSections.filter { it.categoryId == categoryId }
             LaunchedEffect(categoryId) { if (sectionId != null && sectionsForCat.none { it.id == sectionId }) sectionId = null }
             val sectionRequired = d.allowed != null
-            val valid = categoryId != null && name.trim().length >= 2 && priceUsd.toPriceOrNull() != null && priceDzd.toPriceOrNull() != null &&
+            val isPkg = pricing == com.medk.app.data.Product.PRICING_PACKAGES
+            val isUnit = pricing == com.medk.app.data.Product.PRICING_PER_UNIT
+            val base = unitBase.toIntOrNull(); val mn = minAmount.toIntOrNull(); val mx = maxAmount.toIntOrNull()
+            val pricingValid = when {
+                isPkg -> parsedPkgs.isNotEmpty() && parsedPkgs.size == pkgs.count { it.first.isNotBlank() || it.second.isNotBlank() || it.third.isNotBlank() }
+                isUnit -> priceUsd.toPriceOrNull() != null && priceDzd.toPriceOrNull() != null && base != null && base >= 1 &&
+                    mn != null && mx != null && mn >= 1 && mx >= mn
+                else -> priceUsd.toPriceOrNull() != null && priceDzd.toPriceOrNull() != null
+            }
+            val valid = categoryId != null && name.trim().length >= 2 && pricingValid &&
                 (stock.isBlank() || stock.toIntOrNull()?.let { it >= 0 } == true) && (!sectionRequired || sectionId != null)
 
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -203,10 +227,47 @@ fun ProductEditScreen(id: String?, nav: NavHostController) {
                     sectionId, { sectionId = it })
                 MedkTextField(name, { name = it }, "اسم المنتج")
                 MedkTextField(desc, { desc = it }, "الوصف", singleLine = false, minLines = 3)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MedkTextField(priceUsd, { priceUsd = it }, "السعر USD", Modifier.weight(1f), keyboardType = KeyboardType.Decimal)
-                    MedkTextField(priceDzd, { priceDzd = it }, "السعر DZD", Modifier.weight(1f), keyboardType = KeyboardType.Decimal)
+                Text("طريقة التسعير", style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(com.medk.app.data.Product.PRICING_FIXED to "سعر واحد", com.medk.app.data.Product.PRICING_PACKAGES to "باقات",
+                        com.medk.app.data.Product.PRICING_PER_UNIT to "كمية حرة").forEach { (k, label) ->
+                        androidx.compose.material3.FilterChip(pricing == k, { pricing = k }, { Text(label) }, Modifier.weight(1f))
+                    }
                 }
+                Text(when {
+                    isPkg -> "مثال: 100 جوهرة = 250 دج، 310 جوهرة = 750 دج… العميل يختار باقة."
+                    isUnit -> "مثال: كل 100 شدة = 250 دج. العميل يكتب الكمية التي يريدها ويُحسب السعر تلقائياً."
+                    else -> "سعر واحد للمنتج، والعميل يختار عدد القطع."
+                }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (isPkg || isUnit) MedkTextField(unit, { unit = it.take(20) }, "اسم الوحدة (جوهرة، شدة، UC، كوينز…)")
+                if (isPkg) {
+                    pkgs.forEachIndexed { i, (a, dz, us) ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            MedkTextField(a, { v -> pkgs[i] = Triple(v.filter(Char::isDigit).take(9), dz, us) }, "الكمية",
+                                Modifier.weight(1f), keyboardType = KeyboardType.Number)
+                            MedkTextField(dz, { v -> pkgs[i] = Triple(a, v, us) }, "دج", Modifier.weight(1f), keyboardType = KeyboardType.Decimal)
+                            MedkTextField(us, { v -> pkgs[i] = Triple(a, dz, v) }, "USD", Modifier.weight(1f), keyboardType = KeyboardType.Decimal)
+                            IconButton({ if (pkgs.size > 1) pkgs.removeAt(i) else pkgs[0] = Triple("", "", "") }) {
+                                Icon(Icons.Filled.Close, "حذف الباقة", tint = MedkColors.Danger)
+                            }
+                        }
+                    }
+                    if (pkgs.size < 20) com.medk.app.ui.components.SecondaryButton("إضافة باقة", { pkgs.add(Triple("", "", "")) }, height = 40.dp)
+                } else {
+                    if (isUnit) MedkTextField(unitBase, { unitBase = it.filter(Char::isDigit).take(7) },
+                        "السعر لكل كم ${unit.ifBlank { "وحدة" }}؟ (مثلاً 100)", keyboardType = KeyboardType.Number)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        MedkTextField(priceUsd, { priceUsd = it }, if (isUnit) "سعر ${unitBase.ifBlank { "?" }} بالـ USD" else "السعر USD",
+                            Modifier.weight(1f), keyboardType = KeyboardType.Decimal)
+                        MedkTextField(priceDzd, { priceDzd = it }, if (isUnit) "سعر ${unitBase.ifBlank { "?" }} بالدينار" else "السعر DZD",
+                            Modifier.weight(1f), keyboardType = KeyboardType.Decimal)
+                    }
+                    if (isUnit) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        MedkTextField(minAmount, { minAmount = it.filter(Char::isDigit).take(9) }, "أقل كمية", Modifier.weight(1f), keyboardType = KeyboardType.Number)
+                        MedkTextField(maxAmount, { maxAmount = it.filter(Char::isDigit).take(9) }, "أكبر كمية", Modifier.weight(1f), keyboardType = KeyboardType.Number)
+                    }
+                }
+                MedkTextField(inputLabel, { inputLabel = it.take(40) }, "معلومة يكتبها العميل (اختياري) — مثلاً: ID اللاعب")
                 MedkTextField(stock, { stock = it.filter(Char::isDigit) }, "المخزون (اتركه فارغاً لغير محدود)", keyboardType = KeyboardType.Number)
                 SwitchRow("متاح للبيع", available, { available = it }, "إخفاء المنتج عن العملاء عند الإيقاف")
                 Spacer(Modifier.height(8.dp))
@@ -216,8 +277,11 @@ fun ProductEditScreen(id: String?, nav: NavHostController) {
                     action.run(toast, { toast("تم حفظ المنتج"); nav.popBackStack() }) {
                         c.admin.saveProduct(existing?.id, ProductInput(
                             categoryId = categoryId!!, sectionId = sectionId, name = name.trim(), description = desc.trim().ifBlank { null },
-                            priceUsd = priceUsd.toPriceOrNull()!!, priceDzd = priceDzd.toPriceOrNull()!!, stock = stock.toIntOrNull(),
-                            isAvailable = available, images = images.toList()))
+                            priceUsd = if (isPkg) parsedPkgs.minOf { it.priceUsd } else priceUsd.toPriceOrNull()!!,
+                            priceDzd = if (isPkg) parsedPkgs.minOf { it.priceDzd } else priceDzd.toPriceOrNull()!!, stock = stock.toIntOrNull(),
+                            isAvailable = available, images = images.toList(), pricing = pricing, unit = unit.trim().ifBlank { null },
+                            packages = if (isPkg) parsedPkgs else emptyList(), unitBase = if (isUnit) base!! else 1,
+                            minAmount = mn.takeIf { isUnit }, maxAmount = mx.takeIf { isUnit }, inputLabel = inputLabel.trim().ifBlank { null }))
                     }
                 }, enabled = valid, loading = busy)
             }

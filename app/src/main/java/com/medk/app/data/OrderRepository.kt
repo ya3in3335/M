@@ -75,27 +75,35 @@ open class OrderRepository(private val c: AppContainer) {
             try {
                 val p = db.collection("products").document(line.productId).get().await().toProduct()
                 if (!p.isAvailable) error("no available products")
-                if (p.stock != null && p.stock < line.quantity) error("insufficient stock")
+                // prices are taken from the database product (packages / per-unit), exactly as the rules compute them
+                val (unitUsd, unitDzd) = p.unitPrices(line.packageIndex, line.amount) ?: error("no available products")
+                val qty = if (p.isPerUnit) 1 else line.quantity
+                val units = when { p.isPackages -> p.packages[line.packageIndex!!].amount; p.isPerUnit -> line.amount; else -> null }
+                if (!p.inputLabel.isNullOrBlank() && line.input.isNullOrBlank()) error("input_required")
+                if (p.stock != null && p.stock < qty) error("insufficient stock")
                 val staffId = p.sectionId?.let { sid -> db.collection("sections").document(sid).get().await().getString("assignedStaffId") }
                 val sectionName = p.sectionId?.let { c.catalog.section(it)?.name }
                 val ref = reference()
-                val usd = p.priceUsd * line.quantity
-                val dzd = p.priceDzd * line.quantity
+                val usd = unitUsd * qty
+                val dzd = unitDzd * qty
                 val now = FieldValue.serverTimestamp()
                 val orderRef = db.collection("orders").document()
                 val convRef = db.collection("conversations").document()
-                val body = "مرحباً، أرغب في إتمام الطلب $ref: ${p.name} × ${line.quantity}. الإجمالي: ${"%.2f".format(java.util.Locale.US, usd)} USD / ${dzd.toLong()} DZD" +
+                val body = "مرحباً، أرغب في إتمام الطلب $ref: ${p.name}${units?.let { " — $it ${p.unit ?: ""}".trimEnd() } ?: ""} × $qty." +
+                    (line.input?.let { "\n${p.inputLabel ?: "معلومة"}: $it" } ?: "") + "\nالإجمالي: ${"%.2f".format(java.util.Locale.US, usd)} USD / ${dzd.toLong()} DZD" +
                     (note?.takeIf { it.isNotBlank() }?.let { "\nملاحظة: $it" } ?: "")
                 val batch = db.batch()
                 batch.set(orderRef, mapOf(
                     "reference" to ref, "customerId" to uid, "staffId" to staffId, "sectionId" to p.sectionId, "status" to "open",
                     "totalUsd" to usd, "totalDzd" to dzd, "note" to note?.takeIf { it.isNotBlank() }?.take(500),
-                    "items" to listOf(mapOf("productId" to p.id, "productName" to p.name, "imageUrl" to p.cover, "quantity" to line.quantity,
-                        "unitPriceUsd" to p.priceUsd, "unitPriceDzd" to p.priceDzd)),
+                    "items" to listOf(mapOf("productId" to p.id, "productName" to p.name, "imageUrl" to p.cover, "quantity" to qty,
+                        "unitPriceUsd" to unitUsd, "unitPriceDzd" to unitDzd, "amount" to units,
+                        "packageIndex" to line.packageIndex.takeIf { p.isPackages }, "unit" to p.unit.takeIf { units != null },
+                        "input" to line.input?.take(100))),
                     "createdAt" to now, "updatedAt" to now, "paidAt" to null, "deliveredAt" to null, "closedAt" to null,
                 ))
                 if (p.stock != null) batch.update(db.collection("products").document(p.id),
-                    mapOf("stock" to p.stock - line.quantity, "lastOrderId" to orderRef.id))
+                    mapOf("stock" to p.stock - qty, "lastOrderId" to orderRef.id))
                 batch.set(convRef, mapOf(
                     "customerId" to uid, "staffId" to staffId, "orderId" to orderRef.id, "productId" to null, "sectionId" to p.sectionId,
                     "subject" to ("طلب $ref" + (sectionName?.let { " — $it" } ?: "")).take(140),

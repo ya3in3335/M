@@ -59,6 +59,13 @@ fun DocumentSnapshot.toProduct() = Product(
     description = getString("description"), priceUsd = num("priceUsd"), priceDzd = num("priceDzd"),
     stock = (get("stock") as? Number)?.toInt(), isAvailable = bool("available", true),
     images = (get("images") as? List<String>).orEmpty(), createdAt = ts("createdAt"),
+    pricing = getString("pricing") ?: Product.PRICING_FIXED, unit = getString("unit"),
+    packages = (get("packages") as? List<Map<String, Any?>>).orEmpty().mapNotNull { m ->
+        val a = (m["amount"] as? Number)?.toInt() ?: return@mapNotNull null
+        PricePackage(a, (m["priceDzd"] as? Number)?.toDouble() ?: 0.0, (m["priceUsd"] as? Number)?.toDouble() ?: 0.0)
+    },
+    unitBase = (get("unitBase") as? Number)?.toInt() ?: 1, minAmount = (get("minAmount") as? Number)?.toInt(),
+    maxAmount = (get("maxAmount") as? Number)?.toInt(), inputLabel = getString("inputLabel"),
 )
 
 fun DocumentSnapshot.toBanner() = Banner(
@@ -79,6 +86,7 @@ fun DocumentSnapshot.toOrder(): Order {
             id = "$id-$i", orderId = id, productId = m["productId"] as? String, productName = m["productName"] as? String ?: "",
             imageUrl = m["imageUrl"] as? String, quantity = (m["quantity"] as? Number)?.toInt() ?: 1,
             unitPriceUsd = (m["unitPriceUsd"] as? Number)?.toDouble() ?: 0.0, unitPriceDzd = (m["unitPriceDzd"] as? Number)?.toDouble() ?: 0.0,
+            amount = (m["amount"] as? Number)?.toInt(), unit = m["unit"] as? String, input = m["input"] as? String,
         )
     }
     return Order(

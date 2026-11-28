@@ -140,7 +140,15 @@ fun ProductCard(
             Text(product.name, style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.height(36.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                PriceBlock(product.priceUsd, product.priceDzd, Modifier.weight(1f))
+                Column(Modifier.weight(1f)) {
+                    PriceBlock(product.priceUsd, product.priceDzd)
+                    when {
+                        product.isPackages -> Text("ابتداءً من • ${product.packages.size} باقات", style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                        product.isPerUnit -> Text("لكل ${product.unitBase} ${product.unitLabel}", style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    }
+                }
                 if (onAdd != null && product.inStock) Box(Modifier.size(32.dp).clip(CircleShape)
                     .background(MedkColors.Purple).clickable(onClick = onAdd), contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.AddShoppingCart, "أضف إلى السلة", tint = Color.White, modifier = Modifier.size(15.dp))

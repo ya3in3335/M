@@ -170,9 +170,22 @@ service cloud.firestore {
       allow delete: if isOwner();
     }
 
+    // Pricing: "fixed" (one price), "packages" (list of {amount, priceDzd, priceUsd}) or "perUnit"
+    // (priceUsd / priceDzd = price of unitBase units; the customer picks an amount between minAmount and maxAmount).
+    function validPricing(x) {
+      let pricing = x.get('pricing', 'fixed');
+      return pricing in ['fixed', 'packages', 'perUnit']
+        && optStr(x.get('unit', null), 20) && optStr(x.get('inputLabel', null), 40)
+        && (pricing != 'packages' || (x.packages is list && x.packages.size() >= 1 && x.packages.size() <= 20
+              && x.packages[0].amount is int && x.packages[0].amount > 0 && money(x.packages[0].priceDzd) && money(x.packages[0].priceUsd)))
+        && (pricing != 'perUnit' || (x.unitBase is int && x.unitBase >= 1 && x.unitBase <= 1000000
+              && x.minAmount is int && x.maxAmount is int && x.minAmount >= 1 && x.maxAmount >= x.minAmount && x.maxAmount <= 100000000));
+    }
     function validProduct(x) {
       return x.keys().hasOnly(['categoryId', 'sectionId', 'name', 'description', 'priceUsd', 'priceDzd', 'stock',
-                               'available', 'images', 'createdAt', 'updatedAt', 'lastOrderId'])
+                               'available', 'images', 'createdAt', 'updatedAt', 'lastOrderId',
+                               'pricing', 'unit', 'packages', 'unitBase', 'minAmount', 'maxAmount', 'inputLabel'])
+        && validPricing(x)
         && str(x.categoryId, 40) && exists(/databases/$(database)/documents/categories/$(x.categoryId))
         && (x.get('sectionId', null) == null || exists(/databases/$(database)/documents/sections/$(x.sectionId)))
         && str(x.name, 120) && optStr(x.get('description', null), 2000)
@@ -234,6 +247,25 @@ service cloud.firestore {
     // ------------------------------------------------------------ orders
     // One order per product line. Price, totals, seller and stock are checked
     // against the database here, so a modified app cannot cheat.
+    // The line price must be exactly what the product says for the chosen package / amount.
+    function fixedItemOk(it, p) {
+      return it.get('amount', null) == null && it.get('packageIndex', null) == null
+        && it.unitPriceUsd == p.priceUsd && it.unitPriceDzd == p.priceDzd;
+    }
+    function packageItemOk(it, p) {
+      return it.packageIndex is int && it.packageIndex >= 0 && it.packageIndex < p.packages.size()
+        && it.amount == p.packages[it.packageIndex].amount
+        && it.unitPriceUsd == p.packages[it.packageIndex].priceUsd && it.unitPriceDzd == p.packages[it.packageIndex].priceDzd;
+    }
+    function unitItemOk(it, p) {
+      return it.quantity == 1 && it.get('packageIndex', null) == null
+        && it.amount is int && it.amount >= p.minAmount && it.amount <= p.maxAmount
+        && it.unitPriceUsd == p.priceUsd * it.amount / p.unitBase && it.unitPriceDzd == p.priceDzd * it.amount / p.unitBase;
+    }
+    function itemPriceOk(it, p) {
+      let pricing = p.get('pricing', 'fixed');
+      return pricing == 'packages' ? packageItemOk(it, p) : (pricing == 'perUnit' ? unitItemOk(it, p) : fixedItemOk(it, p));
+    }
     function validNewOrder() {
       let it = d().items[0];
       let p = get(/databases/$(database)/documents/products/$(it.productId)).data;
@@ -243,12 +275,15 @@ service cloud.firestore {
         && d().reference is string && d().reference.matches('MK-[A-Z0-9]{8}')
         && optStr(d().get('note', null), 500)
         && d().items is list && d().items.size() == 1
-        && it.keys().hasOnly(['productId', 'productName', 'imageUrl', 'quantity', 'unitPriceUsd', 'unitPriceDzd'])
+        && it.keys().hasOnly(['productId', 'productName', 'imageUrl', 'quantity', 'unitPriceUsd', 'unitPriceDzd',
+                              'amount', 'packageIndex', 'unit', 'input'])
         && p.available == true
         && it.quantity is int && it.quantity >= 1 && it.quantity <= 99
         && it.productName == p.name
-        && it.unitPriceUsd == p.priceUsd && it.unitPriceDzd == p.priceDzd
-        && d().totalUsd == p.priceUsd * it.quantity && d().totalDzd == p.priceDzd * it.quantity
+        && itemPriceOk(it, p)
+        && it.get('unit', null) == (it.get('amount', null) == null ? null : p.get('unit', null))
+        && (p.get('inputLabel', null) == null ? it.get('input', null) == null : str(it.get('input', null), 100))
+        && d().totalUsd == it.unitPriceUsd * it.quantity && d().totalDzd == it.unitPriceDzd * it.quantity
         && d().sectionId == p.get('sectionId', null)
         && d().staffId == sectionStaff(p.get('sectionId', null))
         && (p.get('stock', null) == null

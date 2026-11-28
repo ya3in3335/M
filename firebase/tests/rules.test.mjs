@@ -42,6 +42,11 @@ describe("security rules (free plan)", () => {
       await setDoc(doc(db, "sections/s_pubg"), { categoryId: "gaming", name: "PUBG", assignedStaffId: null, sortOrder: 2, active: true });
       await setDoc(doc(db, "products/visible"), { ...product(), createdAt: new Date(), updatedAt: new Date() });
       await setDoc(doc(db, "products/stocked"), { ...product({ stock: 5 }), createdAt: new Date(), updatedAt: new Date() });
+      await setDoc(doc(db, "products/pkg"), { ...product({ name: "جواهر Free Fire", pricing: "packages", unit: "جوهرة", inputLabel: "ID اللاعب",
+        priceUsd: 1, priceDzd: 250, packages: [{ amount: 100, priceDzd: 250, priceUsd: 1 }, { amount: 310, priceDzd: 750, priceUsd: 3.1 }] }),
+        createdAt: new Date(), updatedAt: new Date() });
+      await setDoc(doc(db, "products/per"), { ...product({ name: "شدات PUBG", pricing: "perUnit", unit: "شدة", priceUsd: 1.2, priceDzd: 250,
+        unitBase: 100, minAmount: 60, maxAmount: 10000 }), createdAt: new Date(), updatedAt: new Date() });
       await setDoc(doc(db, "products/hidden"), { ...product({ available: false }), createdAt: new Date(), updatedAt: new Date() });
       await setDoc(doc(db, "orders/o1"), { ...order(), createdAt: new Date(), updatedAt: new Date() });
       await setDoc(doc(db, "conversations/c1"), { customerId: "cust", staffId: "st1", orderId: "o1", subject: "x", lastMessage: null, lastMessageAt: new Date(), lastSenderId: "cust" });
@@ -108,6 +113,52 @@ describe("security rules (free plan)", () => {
       await assertFails(setDoc(doc(as("cust"), "publicProfiles/cust"), { displayName: "x", avatarUrl: null, role: "owner" }));
       await assertSucceeds(setDoc(doc(as("cust"), "publicProfiles/cust"), { displayName: "x", avatarUrl: null, role: "customer" }));
       await assertFails(setDoc(doc(as("cust"), "publicProfiles/cust2"), { displayName: "x", avatarUrl: null, role: "customer" }));
+    });
+  });
+
+  describe("quantity pricing: packages & per-unit", () => {
+    const pkgOrder = (idx, o = {}, it = {}) => {
+      const p = [{ amount: 100, priceDzd: 250, priceUsd: 1 }, { amount: 310, priceDzd: 750, priceUsd: 3.1 }][idx];
+      return order({ totalUsd: p.priceUsd * 2, totalDzd: p.priceDzd * 2, ...o },
+        { productId: "pkg", productName: "جواهر Free Fire", quantity: 2, unitPriceUsd: p.priceUsd, unitPriceDzd: p.priceDzd,
+          amount: p.amount, packageIndex: idx, unit: "جوهرة", input: "123456789", ...it });
+    };
+    const unitOrder = (amount, o = {}, it = {}) => order({ totalUsd: 1.2 * amount / 100, totalDzd: 250 * amount / 100, ...o },
+      { productId: "per", productName: "شدات PUBG", quantity: 1, unitPriceUsd: 1.2 * amount / 100, unitPriceDzd: 250 * amount / 100,
+        amount, unit: "شدة", ...it });
+    it("a package is bought at exactly its price", async () => {
+      await assertSucceeds(setDoc(doc(as("cust"), "orders/p1"), pkgOrder(1)));
+      await assertSucceeds(setDoc(doc(as("cust"), "orders/p2"), pkgOrder(0)));
+    });
+    it("package tampering is rejected (price, amount, index, missing player ID)", async () => {
+      await assertFails(setDoc(doc(as("cust"), "orders/x"), pkgOrder(1, { totalDzd: 500 }, { unitPriceDzd: 250 })));
+      await assertFails(setDoc(doc(as("cust"), "orders/x"), pkgOrder(0, {}, { amount: 310 })));
+      await assertFails(setDoc(doc(as("cust"), "orders/x"), pkgOrder(1, {}, { packageIndex: 5 })));
+      await assertFails(setDoc(doc(as("cust"), "orders/x"), pkgOrder(1, {}, { input: null })));
+      await assertFails(setDoc(doc(as("cust"), "orders/x"), pkgOrder(1, {}, { unit: "UC" })));
+      await assertFails(setDoc(doc(as("cust"), "orders/x"), order({}, { productId: "pkg", productName: "جواهر Free Fire" })));   // no package chosen
+    });
+    it("per-unit: price follows the typed amount, within min / max", async () => {
+      await assertSucceeds(setDoc(doc(as("cust"), "orders/u1"), unitOrder(750)));
+      await assertSucceeds(setDoc(doc(as("cust"), "orders/u2"), unitOrder(60)));
+      await assertFails(setDoc(doc(as("cust"), "orders/x"), unitOrder(50)));       // below minimum
+      await assertFails(setDoc(doc(as("cust"), "orders/x"), unitOrder(20000)));    // above maximum
+      await assertFails(setDoc(doc(as("cust"), "orders/x"), unitOrder(750, { totalDzd: 100 }, { unitPriceDzd: 100 })));
+      await assertFails(setDoc(doc(as("cust"), "orders/x"), unitOrder(750, { totalDzd: 250 * 7.5 * 2, totalUsd: 1.2 * 7.5 * 2 }, { quantity: 2 })));
+    });
+    it("fixed products keep working and cannot smuggle an amount", async () => {
+      await assertSucceeds(setDoc(doc(as("cust"), "orders/f1"), order()));
+      await assertFails(setDoc(doc(as("cust"), "orders/x"), order({}, { amount: 1000, unit: "جوهرة" })));
+    });
+    it("sellers save packages / per-unit products; malformed pricing refused", async () => {
+      const base = (o) => ({ ...product(o), createdAt: serverTimestamp() });
+      await assertSucceeds(setDoc(doc(as("st1"), "products/n1"), base({ pricing: "packages", unit: "جوهرة",
+        packages: [{ amount: 100, priceDzd: 250, priceUsd: 1 }], inputLabel: "ID اللاعب" })));
+      await assertSucceeds(setDoc(doc(as("st1"), "products/n2"), base({ pricing: "perUnit", unit: "شدة", unitBase: 100, minAmount: 60, maxAmount: 5000 })));
+      await assertFails(setDoc(doc(as("st1"), "products/n3"), base({ pricing: "packages", packages: [] })));
+      await assertFails(setDoc(doc(as("st1"), "products/n4"), base({ pricing: "perUnit", unitBase: 0, minAmount: 1, maxAmount: 5 })));
+      await assertFails(setDoc(doc(as("st1"), "products/n5"), base({ pricing: "perUnit", unitBase: 100, minAmount: 500, maxAmount: 100 })));
+      await assertFails(setDoc(doc(as("st1"), "products/n6"), base({ pricing: "auction" })));
     });
   });
 

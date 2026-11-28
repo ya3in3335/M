@@ -164,6 +164,13 @@ open class AdminRepository(private val c: AppContainer) {
             "categoryId" to input.categoryId, "sectionId" to input.sectionId, "name" to input.name, "description" to input.description,
             "priceUsd" to input.priceUsd, "priceDzd" to input.priceDzd, "stock" to input.stock, "available" to input.isAvailable,
             "images" to input.images, "updatedAt" to FieldValue.serverTimestamp(),
+            "pricing" to input.pricing, "unit" to input.unit?.trim()?.ifBlank { null }?.take(20),
+            "packages" to if (input.pricing == Product.PRICING_PACKAGES)
+                input.packages.take(20).map { mapOf("amount" to it.amount, "priceDzd" to it.priceDzd, "priceUsd" to it.priceUsd) } else emptyList(),
+            "unitBase" to if (input.pricing == Product.PRICING_PER_UNIT) input.unitBase else 1,
+            "minAmount" to input.minAmount.takeIf { input.pricing == Product.PRICING_PER_UNIT },
+            "maxAmount" to input.maxAmount.takeIf { input.pricing == Product.PRICING_PER_UNIT },
+            "inputLabel" to input.inputLabel?.trim()?.ifBlank { null }?.take(40),
         )
         if (id == null) db.collection("products").add(data + ("createdAt" to FieldValue.serverTimestamp())).await()
         else db.collection("products").document(id).update(data).await()

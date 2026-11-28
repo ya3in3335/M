@@ -147,7 +147,8 @@ fun HomeScreen(nav: NavHostController, onMenu: () -> Unit, unread: Int) {
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 items(s.data.latest, key = { it.id }) { p ->
                                     ProductCard(p, { nav.navigate(Routes.product(p.id)) }, onAdd = {
-                                        scope.launch { c.cart.add(p, 1, null); toast("تمت الإضافة إلى السلة") }
+                                        if (p.pricing != com.medk.app.data.Product.PRICING_FIXED || !p.inputLabel.isNullOrBlank()) nav.navigate(Routes.product(p.id))
+                                        else scope.launch { c.cart.add(p, 1, null); toast("تمت الإضافة إلى السلة") }
                                     }, modifier = Modifier.width(140.dp), isFavorite = p.id in favs,
                                         onFavorite = { scope.launch { runCatching { c.catalog.toggleFavorite(p.id) } } })
                                 }

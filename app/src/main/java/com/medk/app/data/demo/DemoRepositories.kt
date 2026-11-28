@@ -151,17 +151,17 @@ class DemoOrderRepository(c: AppContainer) : OrderRepository(c) {
 
     override suspend fun checkout(lines: List<CartLine>, note: String?): List<CreatedOrder> {
         delay(600); val uid = me().id
-        val resolved = lines.mapNotNull { l -> S.products.firstOrNull { it.id == l.productId && it.isAvailable }?.let { it to l.quantity } }
+        val resolved = lines.mapNotNull { l -> S.products.firstOrNull { it.id == l.productId && it.isAvailable }?.let { it to l } }
         if (resolved.isEmpty()) error("no available products")
-        if (resolved.any { (p, q) -> p.stock != null && p.stock < q }) error("insufficient stock")
+        if (resolved.any { (p, l) -> p.stock != null && p.stock < l.quantity }) error("insufficient stock")
         val sectionsById = S.sections.associateBy { it.id }
         return resolved.groupBy { (p, _) -> p.sectionId?.let { sectionsById[it]?.assignedStaffId } }.map { (staff, group) ->
             val oid = S.id(); val ref = "MK-" + S.id().replace("-", "").take(8).uppercase()
-            val usd = group.sumOf { (p, q) -> p.priceUsd * q }; val dzd = group.sumOf { (p, q) -> p.priceDzd * q }
+            val usd = group.sumOf { (_, l) -> l.priceUsd * l.quantity }; val dzd = group.sumOf { (_, l) -> l.priceDzd * l.quantity }
             val secIds = group.mapNotNull { it.first.sectionId }.distinct()
             S.orders += Order(oid, ref, uid, staff, secIds.singleOrNull(), "open", usd, dzd, note, S.now(), S.now(),
-                items = group.map { (p, q) -> OrderItem(S.id(), oid, p.id, p.name, p.cover, q, p.priceUsd, p.priceDzd) })
-            group.forEach { (p, q) -> if (p.stock != null) S.products.replaceAll { if (it.id == p.id) it.copy(stock = it.stock!! - q) else it } }
+                items = group.map { (p, l) -> OrderItem(S.id(), oid, p.id, p.name, p.cover, l.quantity, l.priceUsd, l.priceDzd, l.amount, l.unit, l.input) })
+            group.forEach { (p, l) -> if (p.stock != null) S.products.replaceAll { if (it.id == p.id) it.copy(stock = it.stock!! - l.quantity) else it } }
             val cid = S.id()
             val secNames = secIds.mapNotNull { sectionsById[it]?.name }.joinToString("، ")
             val body = "مرحباً، أرغب في إتمام الطلب $ref. الإجمالي: ${"%.2f".format(usd)} USD / ${dzd.toLong()} DZD"

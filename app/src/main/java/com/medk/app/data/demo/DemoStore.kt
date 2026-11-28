@@ -9,6 +9,7 @@ import com.medk.app.data.Order
 import com.medk.app.data.OrderItem
 import com.medk.app.data.P2pAsset
 import com.medk.app.data.Product
+import com.medk.app.data.PricePackage
 import com.medk.app.data.Profile
 import com.medk.app.data.Section
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -72,10 +73,13 @@ object DemoStore {
         Product(id, cat, sec, name, desc, usd, dzd, stock, true, emptyList(), now(mins))
 
     val products = mutableListOf(
-        p("p1", "c_gaming", "s_ff", "100 جوهرة Free Fire", "شحن مباشر عبر معرّف اللاعب (ID) خلال دقائق.", 1.0, 270.0, mins = 10),
+        p("p1", "c_gaming", "s_ff", "جواهر Free Fire — باقات", "اختر الباقة، اكتب ID اللاعب، والشحن مباشر خلال دقائق.", 1.0, 250.0, mins = 10)
+            .copy(pricing = Product.PRICING_PACKAGES, unit = "جوهرة", inputLabel = "ID اللاعب", packages = listOf(
+                PricePackage(100, 250.0, 1.0), PricePackage(310, 750.0, 3.0), PricePackage(520, 1200.0, 4.8), PricePackage(1060, 2400.0, 9.5))),
         p("p2", "c_gaming", "s_ff", "520 جوهرة Free Fire", "شحن مباشر عبر ID. أرسل معرّفك في المحادثة بعد الطلب.", 5.0, 1350.0, mins = 20),
         p("p3", "c_gaming", "s_ff", "1080 جوهرة Free Fire", "أفضل قيمة — شحن مباشر.", 9.99, 2700.0, stock = 4, mins = 30),
-        p("p4", "c_gaming", "s_pubg", "60 UC PUBG Mobile", "شدات ببجي موبايل عبر ID.", 0.99, 270.0, mins = 40),
+        p("p4", "c_gaming", "s_pubg", "شدات PUBG — كمية حرة", "اكتب عدد الشدات التي تريدها ويُحسب السعر تلقائياً.", 1.0, 250.0, mins = 40)
+            .copy(pricing = Product.PRICING_PER_UNIT, unit = "شدة", unitBase = 100, minAmount = 60, maxAmount = 20000, inputLabel = "ID اللاعب"),
         p("p5", "c_gaming", "s_pubg", "660 UC PUBG Mobile", "شدات ببجي موبايل عبر ID.", 9.5, 2550.0, mins = 50),
         p("p6", "c_gaming", "s_pubg", "1800 UC PUBG Mobile", "شدات ببجي موبايل عبر ID.", 24.0, 6500.0, stock = 6, mins = 60),
         p("p7", "c_gaming", "s_cod", "880 CP Call of Duty", "نقاط COD Mobile.", 9.99, 2700.0, mins = 70),

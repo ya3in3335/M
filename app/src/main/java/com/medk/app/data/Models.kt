@@ -63,10 +63,43 @@ data class Product(
     @SerialName("is_available") val isAvailable: Boolean = true,
     val images: List<String> = emptyList(),
     @SerialName("created_at") val createdAt: String? = null,
+    /** "fixed" (one price), "packages" (e.g. 100 / 310 / 520 diamonds) or "perUnit" (customer types the amount). */
+    val pricing: String = PRICING_FIXED,
+    /** What is counted: "جوهرة", "شدة", "UC"… */
+    val unit: String? = null,
+    val packages: List<PricePackage> = emptyList(),
+    /** perUnit: priceUsd / priceDzd are the price of [unitBase] units (e.g. 100 diamonds = 250 DZD). */
+    val unitBase: Int = 1,
+    val minAmount: Int? = null,
+    val maxAmount: Int? = null,
+    /** Information the customer must type when ordering, e.g. "ID اللاعب". */
+    val inputLabel: String? = null,
 ) {
     val inStock get() = isAvailable && (stock == null || stock > 0)
     val cover get() = images.firstOrNull()
+    val isPackages get() = pricing == PRICING_PACKAGES && packages.isNotEmpty()
+    val isPerUnit get() = pricing == PRICING_PER_UNIT && unitBase > 0
+    val unitLabel get() = unit?.takeIf { it.isNotBlank() } ?: "وحدة"
+    val minUnits get() = (minAmount ?: unitBase).coerceAtLeast(1)
+    val maxUnits get() = (maxAmount ?: (unitBase * 100)).coerceAtLeast(minUnits)
+
+    /** Unit prices (usd, dzd) of one line — computed exactly like the security rules do. */
+    fun unitPrices(packageIndex: Int?, amount: Int?): Pair<Double, Double>? = when {
+        isPackages -> packages.getOrNull(packageIndex ?: -1)?.let { it.priceUsd to it.priceDzd }
+        isPerUnit -> amount?.takeIf { it in minUnits..maxUnits }?.let { (priceUsd * it / unitBase) to (priceDzd * it / unitBase) }
+        else -> priceUsd to priceDzd
+    }
+
+    companion object {
+        const val PRICING_FIXED = "fixed"
+        const val PRICING_PACKAGES = "packages"
+        const val PRICING_PER_UNIT = "perUnit"
+    }
 }
+
+/** One package of a "packages" product: e.g. 310 diamonds for 750 DZD. */
+@Serializable
+data class PricePackage(val amount: Int, val priceDzd: Double, val priceUsd: Double)
 
 /** Write payload for products (no id/created_at). */
 @Serializable
@@ -80,6 +113,13 @@ data class ProductInput(
     val stock: Int?,
     @SerialName("is_available") val isAvailable: Boolean,
     val images: List<String>,
+    val pricing: String = Product.PRICING_FIXED,
+    val unit: String? = null,
+    val packages: List<PricePackage> = emptyList(),
+    val unitBase: Int = 1,
+    val minAmount: Int? = null,
+    val maxAmount: Int? = null,
+    val inputLabel: String? = null,
 )
 
 @Serializable
@@ -156,7 +196,12 @@ data class OrderItem(
     val quantity: Int,
     @SerialName("unit_price_usd") val unitPriceUsd: Double,
     @SerialName("unit_price_dzd") val unitPriceDzd: Double,
-)
+    val amount: Int? = null,
+    val unit: String? = null,
+    val input: String? = null,
+) {
+    val variant get() = amount?.let { "$it ${unit ?: ""}".trim() }
+}
 
 @Serializable
 data class Order(
@@ -296,7 +341,17 @@ data class CartLine(
     val quantity: Int,
     val sectionId: String? = null,
     val sectionName: String? = null,
-)
+    /** packages / perUnit products: units in this line (e.g. 310 diamonds) and which package. */
+    val amount: Int? = null,
+    val packageIndex: Int? = null,
+    val unit: String? = null,
+    /** what the customer typed for the product's inputLabel (e.g. player ID). */
+    val input: String? = null,
+    val inputLabel: String? = null,
+) {
+    val key get() = "$productId|${packageIndex ?: ""}|${amount ?: ""}|${input ?: ""}"
+    val variant get() = amount?.let { "$it ${unit ?: ""}".trim() }
+}
 
 /** Fine-grained permissions the owner grants to each seller. */
 data class StaffPermissions(

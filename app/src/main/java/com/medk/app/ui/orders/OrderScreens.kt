@@ -82,7 +82,7 @@ fun OrderCard(o: Order, onClick: () -> Unit, customerName: String? = null) {
                 StatusChip(o.statusEnum)
             }
             if (customerName != null) Text("العميل: $customerName", style = MaterialTheme.typography.labelMedium, color = MedkColors.Violet)
-            Text(o.items.joinToString("، ") { "${it.productName} ×${it.quantity}" }, style = MaterialTheme.typography.bodySmall,
+            Text(o.items.joinToString("، ") { "${it.productName}${it.variant?.let { v -> " ($v)" } ?: ""} ×${it.quantity}" }, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -182,6 +182,8 @@ fun OrderDetailScreen(id: String, nav: NavHostController) {
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(it.productName, style = MaterialTheme.typography.titleSmall, maxLines = 2)
+                                    it.variant?.let { v -> Text(v, style = MaterialTheme.typography.labelLarge, color = MedkColors.Violet) }
+                                    it.input?.let { v -> Text("معلومة العميل: $v", style = MaterialTheme.typography.bodySmall) }
                                     Text("الكمية: ${it.quantity} × ${usd(it.unitPriceUsd)}", style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }

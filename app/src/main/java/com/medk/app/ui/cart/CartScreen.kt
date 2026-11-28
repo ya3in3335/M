@@ -86,10 +86,10 @@ fun CartScreen(nav: NavHostController, onMenu: () -> Unit) {
             return@Column
         }
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp, 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(lines, key = { it.productId }) { line ->
+            items(lines, key = { it.key }) { line ->
                 CartRow(line, onOpen = { nav.navigate(Routes.product(line.productId)) },
-                    onQty = { q -> scope.launch { c.cart.setQuantity(line.productId, q) } },
-                    onRemove = { scope.launch { c.cart.remove(line.productId) } })
+                    onQty = { q -> scope.launch { c.cart.setQuantity(line.key, q) } },
+                    onRemove = { scope.launch { c.cart.remove(line.key) } })
             }
             item {
                 MedkTextField(note, { note = it.take(500) }, "ملاحظة للبائع (اختياري) — مثل معرّف اللاعب ID", singleLine = false, minLines = 2)
@@ -118,7 +118,7 @@ fun CartScreen(nav: NavHostController, onMenu: () -> Unit) {
             PrimaryButton("تواصل مع البائع لإتمام الطلب", {
                 action.run(toast) {
                     val created = c.orders.checkout(lines, note)
-                    c.cart.removeAll(lines.map { it.productId })
+                    c.cart.removeAll(lines.map { it.key })
                     note = ""
                     if (created.size == 1) {
                         toast("تم إنشاء الطلب ${created[0].reference}")
@@ -146,6 +146,9 @@ private fun CartRow(line: CartLine, onOpen: () -> Unit, onQty: (Int) -> Unit, on
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(line.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                line.variant?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MedkColors.Violet) }
+                line.input?.let { Text("${line.inputLabel ?: "معلومة"}: $it", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1) }
                 if (line.sectionName != null) Text(line.sectionName, style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(4.dp))
@@ -153,7 +156,7 @@ private fun CartRow(line: CartLine, onOpen: () -> Unit, onQty: (Int) -> Unit, on
             }
             Column(horizontalAlignment = Alignment.End) {
                 IconButton(onRemove, Modifier.size(28.dp)) { Icon(Icons.Filled.DeleteOutline, "حذف", tint = MedkColors.Danger, modifier = Modifier.size(17.dp)) }
-                QuantitySelector(line.quantity, onQty, compact = true)
+                if (line.amount == null || line.packageIndex != null) QuantitySelector(line.quantity, onQty, compact = true)
             }
         }
     }

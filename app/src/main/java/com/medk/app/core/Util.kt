@@ -37,6 +37,7 @@ fun Throwable.friendly(): String {
         m.contains("account_disabled") || m.contains("user account has been disabled") -> "هذا الحساب موقوف. تواصل مع الإدارة."
         m.contains("recent") && m.contains("login") -> "لأسباب أمنية، سجّل الدخول من جديد ثم أعد المحاولة."
         m.contains("email_not_verified") -> "أكّد بريدك الإلكتروني أولاً لإتمام الطلب. أرسلنا لك رابط التأكيد — افتحه ثم أعد المحاولة."
+        m.contains("input_required") -> "أكمل المعلومة المطلوبة للمنتج (مثلاً ID اللاعب) ثم أعد المحاولة."
         m.contains("insufficient stock") -> "الكمية المطلوبة غير متوفرة حالياً."
         m.contains("no available products") -> "المنتجات في السلة لم تعد متوفرة."
         m.contains("resource_exhausted") || m.contains("too many requests") -> "طلبات كثيرة خلال وقت قصير، انتظر دقيقة ثم أعد المحاولة."

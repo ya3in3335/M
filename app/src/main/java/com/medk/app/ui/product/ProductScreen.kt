@@ -38,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -85,6 +86,9 @@ fun ProductScreen(id: String, nav: NavHostController) {
     val scope = rememberCoroutineScope()
     val toast = LocalToast.current
     var qty by rememberSaveable { mutableIntStateOf(1) }
+    var pkgIndex by rememberSaveable { mutableIntStateOf(0) }
+    var amountText by rememberSaveable { mutableStateOf<String?>(null) }
+    var input by rememberSaveable { mutableStateOf("") }
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         MedkTopBar((state as? UiState.Success)?.data?.first?.name ?: "", onBack = { nav.popBackStack() }, actions = {
@@ -126,7 +130,12 @@ fun ProductScreen(id: String, nav: NavHostController) {
                     }
                     Text(product.name, style = MaterialTheme.typography.titleLarge)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        PriceBlock(product.priceUsd, product.priceDzd, Modifier.weight(1f), large = true)
+                        Column(Modifier.weight(1f)) {
+                            if (product.isPackages) Text("ابتداءً من", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            PriceBlock(product.priceUsd, product.priceDzd, large = true)
+                            if (product.isPerUnit) Text("لكل ${product.unitBase} ${product.unitLabel}", style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         if (product.inStock) Pill(product.stock?.let { "متوفر ($it)" } ?: "متوفر", MedkColors.Success, icon = Icons.Filled.CheckCircle)
                         else Pill("غير متوفر", MedkColors.Danger, icon = Icons.Filled.Cancel)
                     }
@@ -134,13 +143,48 @@ fun ProductScreen(id: String, nav: NavHostController) {
                         com.medk.app.ui.components.SectionHeader("الوصف", index = 1)
                         Text(product.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    if (product.inStock) Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("الكمية", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    val amountStr = amountText ?: product.minUnits.toString()
+                    val amount = amountStr.toIntOrNull()
+                    val prices = product.unitPrices(pkgIndex.takeIf { product.isPackages }, amount)
+                    val lineQty = if (product.isPerUnit) 1 else qty
+                    if (product.inStock && product.isPackages) {
+                        com.medk.app.ui.components.SectionHeader("اختر الباقة", index = 2)
+                        product.packages.forEachIndexed { i, pk ->
+                            val on = i == pkgIndex
+                            androidx.compose.material3.Surface(onClick = { pkgIndex = i }, shape = MedkShapes.ChamferSm,
+                                color = if (on) MedkColors.Purple.copy(.18f) else MaterialTheme.colorScheme.surfaceContainer,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, if (on) MedkColors.Violet else MaterialTheme.colorScheme.outline)) {
+                                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    androidx.compose.material3.RadioButton(on, { pkgIndex = i },
+                                        colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = MedkColors.Violet))
+                                    Text("${pk.amount} ${product.unitLabel}", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                                    PriceBlock(pk.priceUsd, pk.priceDzd)
+                                }
+                            }
+                        }
+                    }
+                    if (product.inStock && product.isPerUnit) {
+                        com.medk.app.ui.components.SectionHeader("الكمية المطلوبة", index = 2)
+                        com.medk.app.ui.components.MedkTextField(amountStr, { amountText = it.filter(Char::isDigit).take(9) },
+                            "عدد ${product.unitLabel} (من ${product.minUnits} إلى ${product.maxUnits})",
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                            error = if (amount == null || amount !in product.minUnits..product.maxUnits)
+                                "الكمية يجب أن تكون بين ${product.minUnits} و ${product.maxUnits}" else null)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(1, 2, 5, 10).map { product.unitBase * it }.filter { it in product.minUnits..product.maxUnits }.take(4).forEach { v ->
+                                androidx.compose.material3.AssistChip({ amountText = v.toString() }, { Text("$v") })
+                            }
+                        }
+                    }
+                    if (product.inStock && !product.isPerUnit) Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (product.isPackages) "عدد الباقات" else "الكمية", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                         QuantitySelector(qty, { qty = it.coerceIn(1, maxQty) }, max = maxQty)
                     }
-                    if (product.inStock) Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (product.inStock && !product.inputLabel.isNullOrBlank())
+                        com.medk.app.ui.components.MedkTextField(input, { input = it.take(100) }, product.inputLabel + " (مطلوب)")
+                    if (product.inStock && prices != null) Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("الإجمالي", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                        PriceBlock(product.priceUsd * qty, product.priceDzd * qty)
+                        PriceBlock(prices.first * lineQty, prices.second * lineQty)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Inventory2, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
@@ -152,9 +196,17 @@ fun ProductScreen(id: String, nav: NavHostController) {
             com.medk.app.ui.components.TechRule()
             Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val amountNow = (amountText ?: product.minUnits.toString()).toIntOrNull()
+                val canAdd = product.inStock && product.unitPrices(pkgIndex.takeIf { product.isPackages }, amountNow) != null &&
+                    (product.inputLabel.isNullOrBlank() || input.isNotBlank())
                 PrimaryButton(if (product.inStock) "أضف إلى السلة" else "غير متوفر حالياً", {
-                    scope.launch { c.cart.add(product, qty, section?.name); toast("تمت إضافة ${product.name} إلى السلة") }
-                }, enabled = product.inStock, icon = Icons.Filled.AddShoppingCart)
+                    scope.launch {
+                        c.cart.add(product, qty, section?.name, pkgIndex.takeIf { product.isPackages }, amountNow.takeIf { product.isPerUnit }, input)
+                        toast("تمت إضافة ${product.name} إلى السلة")
+                    }
+                }, enabled = canAdd, icon = Icons.Filled.AddShoppingCart)
+                if (product.inStock && !product.inputLabel.isNullOrBlank() && input.isBlank())
+                    Text("أدخل ${product.inputLabel} أولاً", style = MaterialTheme.typography.labelSmall, color = MedkColors.Warning)
                 SecondaryButton("تواصل مع البائع", {
                     scope.launch {
                         try { nav.navigate(Routes.chat(c.chat.start(product.id, null, product.name))) } catch (e: Exception) { toast(e.friendly()) }

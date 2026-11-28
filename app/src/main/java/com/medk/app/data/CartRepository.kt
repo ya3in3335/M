@@ -29,21 +29,32 @@ class CartRepository(private val context: Context, private val json: Json) {
         }
     }
 
-    suspend fun add(product: Product, quantity: Int, sectionName: String?) = mutate { list ->
-        val i = list.indexOfFirst { it.productId == product.id }
+    /** Adds a line; packages / perUnit products are separate lines per package, amount and typed input. */
+    suspend fun add(product: Product, quantity: Int, sectionName: String?, packageIndex: Int? = null, amount: Int? = null,
+                    input: String? = null) = mutate { list ->
+        val (usd, dzd) = product.unitPrices(packageIndex, amount) ?: return@mutate
+        val units = when { product.isPackages -> product.packages[packageIndex!!].amount; product.isPerUnit -> amount; else -> null }
         val max = product.stock ?: 99
-        if (i >= 0) list[i] = list[i].copy(quantity = (list[i].quantity + quantity).coerceAtMost(max),
-            priceUsd = product.priceUsd, priceDzd = product.priceDzd, name = product.name, image = product.cover)
-        else list += CartLine(product.id, product.name, product.cover, product.priceUsd, product.priceDzd,
-            quantity.coerceIn(1, max), product.sectionId, sectionName)
+        val q = if (product.isPerUnit) 1 else quantity.coerceIn(1, max)
+        val line = CartLine(product.id, product.name, product.cover, usd, dzd, q, product.sectionId, sectionName,
+            amount = units, packageIndex = packageIndex.takeIf { product.isPackages }, unit = product.unit.takeIf { units != null },
+            input = input?.trim()?.ifBlank { null }?.take(100), inputLabel = product.inputLabel)
+        val i = list.indexOfFirst { it.key == line.key }
+        when {
+            i < 0 -> list += line
+            product.isPerUnit -> list[i] = line
+            else -> list[i] = list[i].copy(quantity = (list[i].quantity + q).coerceAtMost(max), priceUsd = usd, priceDzd = dzd,
+                name = product.name, image = product.cover)
+        }
     }
 
-    suspend fun setQuantity(productId: String, q: Int) = mutate { list ->
-        val i = list.indexOfFirst { it.productId == productId }
-        if (i >= 0) { if (q <= 0) list.removeAt(i) else list[i] = list[i].copy(quantity = q.coerceAtMost(99)) }
+    suspend fun setQuantity(key: String, q: Int) = mutate { list ->
+        val i = list.indexOfFirst { it.key == key }
+        if (i >= 0) { if (q <= 0) list.removeAt(i) else if (list[i].amount == null || list[i].packageIndex != null)
+            list[i] = list[i].copy(quantity = q.coerceAtMost(99)) }
     }
 
-    suspend fun remove(productId: String) = mutate { list -> list.removeAll { it.productId == productId } }
-    suspend fun removeAll(ids: Collection<String>) = mutate { list -> list.removeAll { it.productId in ids } }
+    suspend fun remove(key: String) = mutate { list -> list.removeAll { it.key == key } }
+    suspend fun removeAll(keys: Collection<String>) = mutate { list -> list.removeAll { it.key in keys } }
     suspend fun clear() = mutate { it.clear() }
 }

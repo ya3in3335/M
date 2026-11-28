@@ -247,7 +247,8 @@ fun ProductGrid(
         if (products.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { EmptyBox(Icons.Filled.Inventory2, emptyText) }
         items(products, key = { it.id }) { p ->
             ProductCard(p, { nav.navigate(Routes.product(p.id)) }, onAdd = {
-                scope.launch { c.cart.add(p, 1, p.sectionId?.let { sectionNames[it] }); toast("تمت الإضافة إلى السلة") }
+                if (p.pricing != com.medk.app.data.Product.PRICING_FIXED || !p.inputLabel.isNullOrBlank()) nav.navigate(Routes.product(p.id))
+                else scope.launch { c.cart.add(p, 1, p.sectionId?.let { sectionNames[it] }); toast("تمت الإضافة إلى السلة") }
             }, isFavorite = p.id in favs, palette = palette, onFavorite = {
                 scope.launch { try { c.catalog.toggleFavorite(p.id) } catch (e: Exception) { toast(e.friendly()) } }
             })
