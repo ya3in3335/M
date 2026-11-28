@@ -123,15 +123,14 @@ jobs:
       - name: Unit & screenshot tests
         run: ./gradlew :app:testStoreProdDebugUnitTest :app:testStoreDemoDebugUnitTest :app:testAdminDemoDebugUnitTest -ProbolectricDepsDir=$HOME/robolectric-jars --stacktrace
 
-      - name: Build debug APKs (store + admin, prod + demo)
-        run: ./gradlew :app:assembleStoreProdDebug :app:assembleStoreDemoDebug :app:assembleAdminProdDebug :app:assembleAdminDemoDebug --stacktrace
 
-      - name: Build release AAB
+      - name: Build release APKs + AAB
         env:
           MEDK_KEYSTORE_PASSWORD: ${{ secrets.MEDK_KEYSTORE_PASSWORD }}
           MEDK_KEY_ALIAS: ${{ secrets.MEDK_KEY_ALIAS }}
           MEDK_KEY_PASSWORD: ${{ secrets.MEDK_KEY_PASSWORD }}
-        run: ./gradlew :app:bundleStoreProdRelease :app:bundleAdminProdRelease :app:assembleStoreProdRelease --stacktrace
+        # optimized (R8 + resource shrinking) APKs ~5 MB — these are what users install and update to
+        run: ./gradlew :app:bundleStoreProdRelease :app:bundleAdminProdRelease :app:assembleStoreProdRelease :app:assembleAdminProdRelease :app:assembleStoreDemoRelease :app:assembleAdminDemoRelease --stacktrace
 
       - name: Remove secrets from workspace
         if: always()
@@ -140,19 +139,19 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: MED-K-store-apk
-          path: app/build/outputs/apk/storeProd/debug/*.apk
+          path: app/build/outputs/apk/storeProd/release/*.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: MED-K-ADMIN-apk
-          path: app/build/outputs/apk/adminProd/debug/*.apk
+          path: app/build/outputs/apk/adminProd/release/*.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: MED-K-DEMO-apks
           path: |
-            app/build/outputs/apk/storeDemo/debug/*.apk
-            app/build/outputs/apk/adminDemo/debug/*.apk
+            app/build/outputs/apk/storeDemo/release/*.apk
+            app/build/outputs/apk/adminDemo/release/*.apk
 
       - uses: actions/upload-artifact@v4
         with:
@@ -171,10 +170,10 @@ jobs:
         if: github.event_name == 'push'
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/storeProd/debug/*.apk dist/MED-K.apk
-          cp app/build/outputs/apk/adminProd/debug/*.apk dist/MED-K-Admin.apk
-          cp app/build/outputs/apk/storeDemo/debug/*.apk dist/MED-K-Demo.apk
-          cp app/build/outputs/apk/adminDemo/debug/*.apk dist/MED-K-Admin-Demo.apk
+          cp app/build/outputs/apk/storeProd/release/*.apk dist/MED-K.apk
+          cp app/build/outputs/apk/adminProd/release/*.apk dist/MED-K-Admin.apk
+          cp app/build/outputs/apk/storeDemo/release/*.apk dist/MED-K-Demo.apk
+          cp app/build/outputs/apk/adminDemo/release/*.apk dist/MED-K-Admin-Demo.apk
 
       - name: Publish release (in-app update source)
         if: github.event_name == 'push'

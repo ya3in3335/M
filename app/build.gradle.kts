@@ -89,8 +89,10 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Production key when provided; otherwise the shared key, so release builds install over earlier
+            // builds and keep the SHA-1 registered in Firebase (Google sign-in).
             val rel = signingConfigs.getByName("release")
-            if (rel.storeFile != null) signingConfig = rel
+            signingConfig = if (rel.storeFile != null) rel else signingConfigs.getByName("debug")
         }
         debug {
             applicationIdSuffix = ""
